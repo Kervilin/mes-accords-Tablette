@@ -73,7 +73,7 @@ const SECTIONS: { t: string; items: string[] }[] = [
     t: "Choisir un accord",
     items: [
       "Touche une note en haut (Do, Ré…) ou une touche du clavier : haut = poussé, bas = tiré.",
-      "Touche le grand rond de l'accord (Fa : Fa La Do) : fais défiler les notes et les types d'accord, puis choisis Maj / Min et les tierces.",
+      "Touche le grand rond de l'accord (Fa : Fa La Do) : on règle le type, le sens, Maj / Min et les tierces.",
       "Appui long sur ce rond : tu entends l'accord, tant que tu appuies.",
     ],
   },
@@ -82,6 +82,7 @@ const SECTIONS: { t: string; items: string[] }[] = [
     items: [
       "Rouge : touches à jouer · double cercle : fondamentale · italique : notes ajoutées (6, 7, 9).",
       "Touche une note rouge à droite : elle et les suivantes plus aiguës s'allument (fenêtre de jeu).",
+      "Appui long sur une touche : ajoute-la à l'accord, même éteinte ; appui long à nouveau : retire-la. Le rond affiche les notes choisies et le nom s'il est reconnu.",
       "Pince à deux doigts pour agrandir ou réduire le clavier.",
     ],
   },

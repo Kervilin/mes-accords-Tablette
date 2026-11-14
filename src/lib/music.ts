@@ -378,3 +378,82 @@ export function buildView(kb: KB, S: Sel): VM {
     chordNotes: chordPcs,
   };
 }
+
+/**
+ * After a long touch, the player chooses actual keys rather than the automatic
+ * fingering. Recognize a chord only when its exact pitch classes match one of
+ * the known shapes relative to the requested fundamental.
+ */
+export function buildManualView(
+  kb: KB,
+  S: Sel,
+  right: ReadonlySet<string>,
+  left: ReadonlySet<number>,
+  touchedLeft: ReadonlySet<number> = new Set(),
+): VM {
+  const base = buildView(kb, S);
+  if (S.root < 0) return base;
+  const pickedRight = kb.b.filter((b) => right.has(btnId(b)) && b.m[S.dir] > 0);
+  const pickedLeft = kb.l.filter((b, ix) => left.has(ix) && b.k[S.dir] >= 0);
+  const bass = pickedLeft.find((b) => b.up) ?? null;
+  const chord = pickedLeft.find((b) => !b.up) ?? null;
+  const bassNotes = bass ? [bass.k[S.dir]] : [];
+  const chordNotes = chord
+    ? S.tierces
+      ? leftTriad(chord.k[S.dir])
+      : [chord.k[S.dir], pcOf(chord.k[S.dir] + 7)]
+    : [];
+  const midis = [
+    ...pickedRight.map((b) => b.m[S.dir]),
+    ...bassNotes.map((p) => 36 + p),
+    ...chordNotes.map((p) => 48 + p),
+  ].sort((a, b) => a - b);
+  // Automatic bass/chord suggestions do not define the requested composition:
+  // only the selected right-hand keys and left-hand keys explicitly long-pressed do.
+  const composition = [
+    ...pickedRight.map((b) => b.m[S.dir]),
+    ...pickedLeft.filter((b) => touchedLeft.has(kb.l.indexOf(b))).flatMap((b) =>
+      b.up ? [b.k[S.dir]] : S.tierces ? leftTriad(b.k[S.dir]) : [b.k[S.dir], pcOf(b.k[S.dir] + 7)],
+    ),
+  ];
+  const pcs = [...new Set(composition.map(pcOf))];
+  const ordered = pcs.sort((a, b) => pcOf(a - S.root) - pcOf(b - S.root));
+  const degrees = ordered.map((p) => pcOf(p - S.root)).sort((a, b) => a - b);
+
+  let recognized: { enr: string; mode: "maj" | "min" } | null = null;
+  if (degrees.includes(0)) {
+    for (const enr of ["par", "s7", "s9", "q5", "sus2", "sus4", "s6", "s7M", "a9"]) {
+      for (const mode of [S.mode, S.mode === "maj" ? "min" : "maj"] as const) {
+        const expected = [...new Set(intervals(enr, mode === "min" ? 3 : 4).map(pcOf))].sort((a, b) => a - b);
+        if (degrees.length === expected.length && degrees.every((p, i) => p === expected[i])) {
+          recognized = { enr, mode };
+          break;
+        }
+      }
+      if (recognized) break;
+    }
+  }
+  const name = recognized
+    ? pn(S.root) + (!isSym(recognized.enr) && recognized.mode === "min" ? "m" : "") + SUF[recognized.enr]
+    : pn(S.root);
+  const added = recognized ? (Q4I[recognized.enr] ?? []).map((i) => pcOf(S.root + i)) : [];
+  return {
+    ...base,
+    cp: ordered,
+    q4: added,
+    name,
+    notes: ordered.map((p) => ({ p, added: added.includes(p) })),
+    selected: new Set(pickedRight.map(btnId)),
+    roots: new Set(pickedRight.filter((b) => pcOf(b.m[S.dir]) === S.root).map(btnId)),
+    low: null,
+    pb: bass,
+    pc: chord,
+    leftPick: new Set(kb.l.flatMap((b, ix) => pickedLeft.includes(b) ? [ix] : [])),
+    leftAlt: new Set(),
+    bassNotes,
+    chordNotes,
+    miss: [],
+    status: `Touches choisies : ${ordered.length ? ordered.map(pn).join(" · ") : "aucune"}. ${recognized ? name : `Fondamentale ${pn(S.root)}`}.`,
+    playMidis: midis,
+  };
+}

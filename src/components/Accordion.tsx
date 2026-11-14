@@ -518,6 +518,8 @@ function ChordCard(p: {
   const timer = useRef<number | null>(null);
   const down = useRef(false);
   const held = useRef(false);
+  const skipClick = useRef(false);
+  const origin = useRef({ x: 0, y: 0 });
   const [pressed, setPressed] = useState(false);
   const clear = () => {
     if (timer.current !== null) {
@@ -532,30 +534,37 @@ function ChordCard(p: {
   };
   const onDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (!p.interactive || down.current) return;
-    e.preventDefault();
+    origin.current = { x: e.clientX, y: e.clientY };
     down.current = true;
     held.current = false;
+    skipClick.current = false;
     setPressed(true);
     clear();
     timer.current = window.setTimeout(() => {
       timer.current = null;
       if (!down.current) return;
       held.current = true;
+      skipClick.current = true;
       buzz(8);
       p.onHoldStart?.();
     }, 350);
   };
-  const onUp = () => {
+  const onUp = (e: RPointerEvent<HTMLDivElement>) => {
     if (!down.current) return;
     down.current = false;
     setPressed(false);
     clear();
     if (held.current) endHold();
-    else p.onOpen?.();
+    else if (!skipClick.current && e.pointerType !== "mouse") {
+      // Mobile WebViews may never synthesize a click after a touch. Open now.
+      skipClick.current = true;
+      p.onOpen?.();
+    }
   };
   const onLeave = () => {
     if (!down.current) return;
     down.current = false;
+    skipClick.current = true;
     setPressed(false);
     clear();
     endHold();
@@ -579,10 +588,21 @@ function ChordCard(p: {
       tabIndex={p.interactive ? 0 : -1}
       aria-label={p.interactive ? "Accord : toucher pour régler, appui long pour l'entendre" : undefined}
       onPointerDown={onDown}
+      onPointerMove={(e) => {
+        if (!down.current || held.current) return;
+        if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 12) {
+          clear();
+          skipClick.current = true;
+        }
+      }}
       onPointerUp={onUp}
       onPointerCancel={onLeave}
       onPointerOut={onOut}
       onPointerLeave={onLeave}
+      onClick={() => {
+        if (!p.interactive || skipClick.current) return;
+        p.onOpen?.();
+      }}
       onContextMenu={(e) => e.preventDefault()}
       onKeyDown={(e) => {
         if (p.interactive && (e.key === "Enter" || e.key === " ")) {
@@ -592,6 +612,78 @@ function ChordCard(p: {
       }}
     >
       {p.children}
+    </div>
+  );
+}
+
+/** A long touch toggles a key without also firing its normal short-click action. */
+function PlayKey({
+  className,
+  style,
+  title,
+  onShort,
+  onLong,
+  children,
+}: {
+  className: string;
+  style: CSSProperties;
+  title: string;
+  onShort: () => void;
+  onLong: () => void;
+  children: React.ReactNode;
+}) {
+  const timer = useRef<number | null>(null);
+  const origin = useRef({ x: 0, y: 0 });
+  const skipClick = useRef(false);
+  const clear = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => clear, []);
+
+  return (
+    <div
+      className={className}
+      style={style}
+      role="button"
+      tabIndex={0}
+      title={title}
+      onPointerDown={(e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        skipClick.current = false;
+        origin.current = { x: e.clientX, y: e.clientY };
+        clear();
+        timer.current = window.setTimeout(() => {
+          timer.current = null;
+          skipClick.current = true;
+          buzz(12);
+          onLong();
+        }, 420);
+      }}
+      onPointerMove={(e) => {
+        if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 12) {
+          clear();
+          skipClick.current = true;
+        }
+      }}
+      onPointerUp={clear}
+      onPointerCancel={() => {
+        clear();
+        skipClick.current = true;
+      }}
+      onPointerLeave={clear}
+      onContextMenu={(e) => e.preventDefault()}
+      onClick={() => {
+        if (!skipClick.current) onShort();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onShort();
+        }
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -610,8 +702,10 @@ export type KeyboardViewProps = {
   onDir: (d: 0 | 1) => void;
   onMode: (m: "maj" | "min") => void;
   onRight: (id: string) => void;
+  onLongRight?: (id: string) => void;
   onRightRoot: (b: { m: [number, number] }, d: 0 | 1) => void;
   onLeft: (ix: number, d: 0 | 1) => void;
+  onLongLeft?: (ix: number) => void;
   onEditRight: (key: string) => void;
   onEditLeft: (key: string) => void;
   onRaz: () => void;
@@ -752,21 +846,18 @@ export function KeyboardView(p: KeyboardViewProps) {
       const isCand = b.m[d] > 0 && vm.cp.includes(pc);
       const sel = vm.selected.has(k);
       return (
-        <div
+        <PlayKey
           key={k}
           className={cs("w", isCand ? "cand" : "dim", vm.roots.has(k) && "root")}
           style={pos}
-          onClick={() => (isCand ? p.onRight(k) : b.m[d] > 0 && p.onRightRoot(b, d))}
-          role="button"
-          tabIndex={0}
-          title={isCand ? "Placer cette note en bas de la fenêtre" : "Choisir cette note comme fondamentale"}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              if (isCand) p.onRight(k);
-              else if (b.m[d] > 0) p.onRightRoot(b, d);
-            }
+          onShort={() => {
+            if (isCand) p.onRight(k);
+            else if (b.m[d] > 0) p.onRightRoot(b, d);
           }}
+          onLong={() => {
+            if (b.m[d] > 0) p.onLongRight?.(k);
+          }}
+          title="Toucher : choisir la note. Appui long : ajouter ou retirer cette touche de l'accord."
         >
           <div
             className={cs("c", d ? "pl" : "ph", sel && "sel", vm.q4.includes(pc) && "it")}
@@ -775,7 +866,7 @@ export function KeyboardView(p: KeyboardViewProps) {
             {b.m[d] > 0 ? pn(b.m[d]) : "—"}
           </div>
           <em>{btnLab(b)}</em>
-        </div>
+        </PlayKey>
       );
     });
   };
@@ -860,14 +951,17 @@ export function KeyboardView(p: KeyboardViewProps) {
       const pick = vm.leftPick.has(ix);
       const alt = vm.leftAlt.has(ix);
       return (
-        <div
+        <PlayKey
           key={ix}
           className={cs("w cand", !pick && !alt && "dim", alt && "alt", pick && k === root && "root")}
           style={pos}
-          onClick={() => k >= 0 && p.onLeft(ix, d)}
-          role="button"
-          tabIndex={0}
-          title={x.up ? "Basse" : "Accord"}
+          onShort={() => {
+            if (k >= 0) p.onLeft(ix, d);
+          }}
+          onLong={() => {
+            if (k >= 0) p.onLongLeft?.(ix);
+          }}
+          title={`${x.up ? "Basse" : "Accord"}. Appui long : ajouter ou retirer cette touche.`}
         >
           <div
             className={cs("c", d ? "pl" : "ph", pick && "sel", vm.q4.includes(k) && "it")}
@@ -876,7 +970,7 @@ export function KeyboardView(p: KeyboardViewProps) {
           >
             {k >= 0 ? ld(x.lab[d]) : "—"}
           </div>
-        </div>
+        </PlayKey>
       );
     });
   };

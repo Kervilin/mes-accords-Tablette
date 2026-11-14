@@ -1,54 +1,39 @@
-import { useEffect, useRef } from "react";
 import { Icon } from "@/components/Chrome";
-import { MAIN, N, OTH, nm } from "@/lib/music";
+import { MAIN, OTH } from "@/lib/music";
 
 /* ============================================================
    Réglage de l'accord, ouvert par un toucher sur le grand rond :
-     1re ligne : notes, défilement horizontal
-     2e ligne  : types d'accord, défilement horizontal
+     1re ligne : types d'accord (Parfait, 7, 9, 5, sus2…)
+     2e ligne  : sens (Poussé / Tiré)
      3e ligne  : Maj, Min, et Tierces (Sans tierce / Avec tierces)
    ============================================================ */
 export function ChordPicker({
   open,
-  root,
   enr,
+  dir,
   mode,
   isSym,
   tierces,
-  onRoot,
   onEnr,
+  onDir,
   onMode,
   onTierces,
   onClose,
 }: {
   open: boolean;
-  root: number;
   enr: string;
+  dir: 0 | 1;
   mode: "maj" | "min";
   isSym: boolean;
   tierces: boolean;
-  onRoot: (root: number) => void;
   onEnr: (v: string) => void;
+  onDir: (d: 0 | 1) => void;
   onMode: (m: "maj" | "min") => void;
   onTierces: () => void;
   onClose: () => void;
 }) {
-  const types: [string, string][] = [...MAIN, ...OTH];
-  const notesRef = useRef<HTMLDivElement>(null);
-  const typesRef = useRef<HTMLDivElement>(null);
-
-  // Centrer les choix actifs à l'ouverture, sans faire défiler la page derrière.
-  useEffect(() => {
-    if (!open) return;
-    for (const list of [notesRef.current, typesRef.current]) {
-      const selected = list?.querySelector<HTMLElement>('[aria-pressed="true"]');
-      if (list && selected) {
-        list.scrollLeft = selected.offsetLeft - (list.clientWidth - selected.offsetWidth) / 2;
-      }
-    }
-  }, [open]);
-
   if (!open) return null;
+  const types: [string, string][] = [...MAIN, ...OTH];
 
   const chip = (on: boolean, disabled = false) => ({
     background: on ? "var(--c-sel)" : "var(--c-card)",
@@ -86,29 +71,13 @@ export function ChordPicker({
           </button>
         </div>
 
-        {/* 1re ligne : les mêmes notes défilantes qu'en haut de l'appli */}
-        <div ref={notesRef} className="nt relative flex gap-1.5 overflow-x-auto pb-1" aria-label="Notes">
-          {([[-1, "—"], ...N.map((n, i) => [i, nm(n)])] as [number, string][]).map(([v, l]) => (
-            <button
-              key={v}
-              type="button"
-              className="ch min-w-[54px] shrink-0"
-              style={chip(root === v)}
-              aria-pressed={root === v}
-              onClick={() => onRoot(v)}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-
-        {/* 2e ligne : tous les types d'accord sur une seule ligne défilante */}
-        <div ref={typesRef} className="nt relative mt-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Types d'accord">
+        {/* 1re ligne : types d'accord */}
+        <div className="grid grid-cols-3 gap-1.5">
           {types.map(([v, l]) => (
             <button
               key={v}
               type="button"
-              className="ch min-h-[46px] shrink-0 whitespace-nowrap px-4 text-[15px] font-bold"
+              className="ch min-h-[46px] text-[15px] font-bold"
               style={chip(enr === v)}
               aria-pressed={enr === v}
               onClick={() => onEnr(v)}
@@ -116,6 +85,38 @@ export function ChordPicker({
               {l}
             </button>
           ))}
+        </div>
+
+        {/* 2e ligne : sens */}
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            className="ch min-h-[46px] text-[15px] font-bold"
+            style={{
+              ...chip(dir === 0),
+              background: dir === 0 ? "var(--c-org)" : "var(--c-card)",
+              borderColor: dir === 0 ? "var(--c-org)" : "var(--c-bd)",
+              color: dir === 0 ? "#1b1005" : "var(--c-tx)",
+            }}
+            aria-pressed={dir === 0}
+            onClick={() => onDir(0)}
+          >
+            Poussé
+          </button>
+          <button
+            type="button"
+            className="ch min-h-[46px] text-[15px] font-bold"
+            style={{
+              ...chip(dir === 1),
+              background: dir === 1 ? "var(--c-yel)" : "var(--c-card)",
+              borderColor: dir === 1 ? "var(--c-yel)" : "var(--c-bd)",
+              color: dir === 1 ? "#1b1503" : "var(--c-tx)",
+            }}
+            aria-pressed={dir === 1}
+            onClick={() => onDir(1)}
+          >
+            Tiré
+          </button>
         </div>
 
         {/* 3e ligne : Maj, Min, tierces */}

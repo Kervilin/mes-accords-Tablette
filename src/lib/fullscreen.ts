@@ -153,7 +153,9 @@ export function autoFullscreenOnFirstGesture(enabled: boolean): () => void {
     cleanup();
     void enterFullscreen();
   };
-  const events: (keyof WindowEventMap)[] = ["pointerdown", "touchstart", "keydown"];
+  // Wait for the finger to lift: switching display mode on pointerdown can
+  // cancel that same tap (notably on the chord card in Android WebView).
+  const events: (keyof WindowEventMap)[] = ["pointerup", "touchend", "keydown"];
   const cleanup = () => events.forEach((e) => window.removeEventListener(e, handler as EventListener));
   events.forEach((e) => window.addEventListener(e, handler as EventListener, { once: false, passive: true }));
   return cleanup;

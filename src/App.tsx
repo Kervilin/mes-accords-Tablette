@@ -34,6 +34,7 @@ import {
   N,
   NP,
   OTH,
+  buildManualView,
   buildView,
   isSym,
   ld,
@@ -93,6 +94,11 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [chordMenu, setChordMenu] = useState(false);
   const [picker, setPicker] = useState(false);
+  const [manual, setManual] = useState<{
+    right: Set<string>;
+    left: Set<number>;
+    touchedLeft: Set<number>;
+  } | null>(null);
   /* Textes d'aide / légendes : masqués par défaut, réaffichés avec le bouton T */
   /* taille du clavier : null = ajusté automatiquement à l'écran ; sinon choisie au pincement */
   const [kbZoom, setKbZoom] = useState<number | null>(() => {
@@ -199,7 +205,38 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToastTxt(null), 4200);
   }, []);
 
-  const vm = useMemo(() => buildView(kb, S), [kb, S]);
+  const automatic = useMemo(() => buildView(kb, S), [kb, S]);
+  const vm = useMemo(
+    () => manual ? buildManualView(kb, S, manual.right, manual.left, manual.touchedLeft) : automatic,
+    [kb, S, automatic, manual],
+  );
+  // A new chord, direction, keyboard or edit session resumes automatic fingering.
+  useEffect(() => setManual(null), [S.root, S.enr, S.mode, S.dir, S.tierces, kb, edit]);
+
+  const toggleManualRight = (id: string) => {
+    if (edit || S.root < 0) return;
+    setManual((current) => {
+      const right = new Set(current?.right ?? automatic.selected);
+      // Manual fingering starts with the lit right-hand keys; left-hand
+      // accompaniment is added only if the player explicitly selects it.
+      const left = new Set(current?.left);
+      if (right.has(id)) right.delete(id);
+      else right.add(id);
+      return { right, left, touchedLeft: new Set(current?.touchedLeft) };
+    });
+  };
+  const toggleManualLeft = (ix: number) => {
+    if (edit || S.root < 0) return;
+    setManual((current) => {
+      const right = new Set(current?.right ?? automatic.selected);
+      const left = new Set(current?.left ?? automatic.leftPick);
+      const touchedLeft = new Set(current?.touchedLeft ?? automatic.leftPick);
+      if (left.has(ix)) left.delete(ix);
+      else left.add(ix);
+      touchedLeft.add(ix);
+      return { right, left, touchedLeft };
+    });
+  };
 
   /* ---------- initialisation ---------- */
   useEffect(() => {
@@ -1194,7 +1231,11 @@ export default function App() {
             onMode={(m) => {
               if (!isSym(S.enr)) setS((s) => ({ ...s, mode: m, low: null }));
             }}
-            onRight={(id) => setS((s) => ({ ...s, low: id }))}
+            onRight={(id) => {
+              setManual(null);
+              setS((s) => ({ ...s, low: id }));
+            }}
+            onLongRight={toggleManualRight}
             onRightRoot={(b, dd) =>
               b.m[dd] > 0 && setS((s) => ({ ...s, root: pcOf(b.m[dd]), dir: dd, low: null }))
             }
@@ -1202,6 +1243,7 @@ export default function App() {
               kb.l[ix].k[dd] >= 0 &&
               setS((s) => ({ ...s, root: kb.l[ix].k[dd], dir: dd, low: null }))
             }
+            onLongLeft={toggleManualLeft}
             onEditRight={pickRight}
             onEditLeft={pickLeft}
             onRaz={() => {
@@ -1611,13 +1653,13 @@ export default function App() {
 
       <ChordPicker
         open={picker}
-        root={S.root}
         enr={S.enr}
+        dir={S.dir}
         mode={S.mode}
         isSym={isSym(S.enr)}
         tierces={S.tierces}
-        onRoot={(root) => setS((st) => ({ ...st, root, low: null }))}
         onEnr={(v) => setS((st) => ({ ...st, enr: v, low: null, more: false }))}
+        onDir={(d) => setDir(d)}
         onMode={(m) => {
           if (!isSym(S.enr)) setS((st) => ({ ...st, mode: m, low: null }));
         }}
