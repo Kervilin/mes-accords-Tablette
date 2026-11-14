@@ -5,7 +5,7 @@
    - navigation : réseau d'abord, cache en secours
    Pense à changer CACHE à chaque nouveau déploiement.
    ============================================================ */
-const VERSION = "v11";
+const VERSION = "v12-chord-controls";
 const CACHE = "mes-accords-shell-" + VERSION;
 const FONTS = "mes-accords-fonts-" + VERSION;
 const SHELL = [

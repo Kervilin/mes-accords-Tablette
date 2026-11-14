@@ -9,16 +9,34 @@ let live: { osc: OscillatorNode[]; gain: GainNode; stopAt: number } | null = nul
 
 function ctx(): AudioContext | null {
   try {
-    if (!actx) {
+    if (!actx || actx.state === "closed") {
       const AC: typeof AudioContext =
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AC) return null;
       actx = new AC();
     }
-    if (actx.state === "suspended") void actx.resume();
+    if (actx.state === "suspended") void actx.resume().catch(() => undefined);
     return actx;
   } catch {
     return null;
+  }
+}
+
+/** Call from the initial touch so mobile audio is unlocked before the hold timer. */
+export function prepareAudio(): void {
+  ctx();
+}
+
+function trackVoice(osc: OscillatorNode[], gain: GainNode, nodes: AudioNode[], stopAt: number) {
+  const voice = { osc, gain, stopAt };
+  live = voice;
+  let remaining = osc.length;
+  for (const oscillator of osc) {
+    oscillator.onended = () => {
+      if (--remaining > 0) return;
+      nodes.forEach((node) => node.disconnect());
+      if (live === voice) live = null;
+    };
   }
 }
 
@@ -29,10 +47,14 @@ export function stopChord() {
   const t = c.currentTime;
   if (t < stopAt) {
     try {
-      gain.gain.cancelScheduledValues(t);
-      gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.0001), t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-      osc.forEach((o) => o.stop(t + 0.18));
+      if (typeof gain.gain.cancelAndHoldAtTime === "function") gain.gain.cancelAndHoldAtTime(t);
+      else {
+        const level = Math.max(gain.gain.value, 0.0001);
+        gain.gain.cancelScheduledValues(t);
+        gain.gain.setValueAtTime(level, t);
+      }
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      osc.forEach((o) => o.stop(t + 0.08));
     } catch {}
   }
   live = null;
@@ -61,6 +83,7 @@ export function playChord(midis: number[], dur = 1.9): boolean {
   comp.connect(c.destination);
 
   const oscs: OscillatorNode[] = [];
+  const nodes: AudioNode[] = [master, comp];
   uniq.forEach((m, i) => {
     const f = 440 * Math.pow(2, (m - 69) / 12);
     const delay = i * 0.016;
@@ -74,6 +97,7 @@ export function playChord(midis: number[], dur = 1.9): boolean {
     lp.Q.value = 0.8;
     g.connect(lp);
     lp.connect(master);
+    nodes.push(g, lp);
     [-8, 8].forEach((det) => {
       const o = c.createOscillator();
       o.type = "sawtooth";
@@ -87,10 +111,11 @@ export function playChord(midis: number[], dur = 1.9): boolean {
       o.start(t0 + delay);
       o.stop(t0 + dur + 0.06);
       oscs.push(o);
+      nodes.push(o, og);
     });
   });
 
-  live = { osc: oscs, gain: master, stopAt: t0 + dur + 0.1 };
+  trackVoice(oscs, master, nodes, t0 + dur + 0.1);
   return true;
 }
 
@@ -136,6 +161,7 @@ export function holdChord(midis: number[]): boolean {
   comp.connect(c.destination);
 
   const oscs: OscillatorNode[] = [];
+  const nodes: AudioNode[] = [master, comp];
   uniq.forEach((m, i) => {
     const f = 440 * Math.pow(2, (m - 69) / 12);
     const delay = i * 0.016;
@@ -148,6 +174,7 @@ export function holdChord(midis: number[]): boolean {
     lp.Q.value = 0.8;
     g.connect(lp);
     lp.connect(master);
+    nodes.push(g, lp);
     [-8, 8].forEach((det) => {
       const o = c.createOscillator();
       o.type = "sawtooth";
@@ -160,10 +187,11 @@ export function holdChord(midis: number[]): boolean {
       og.connect(g);
       o.start(t0 + delay);
       oscs.push(o);
+      nodes.push(o, og);
     });
   });
 
   // stopAt infini : tant que rien ne l'arrête, le son continue
-  live = { osc: oscs, gain: master, stopAt: Number.POSITIVE_INFINITY };
+  trackVoice(oscs, master, nodes, Number.POSITIVE_INFINITY);
   return true;
 }

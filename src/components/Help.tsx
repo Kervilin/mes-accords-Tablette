@@ -73,8 +73,8 @@ const SECTIONS: { t: string; items: string[] }[] = [
     t: "Choisir un accord",
     items: [
       "Touche une note en haut (Do, Ré…) ou une touche du clavier : haut = poussé, bas = tiré.",
-      "Touche le grand rond de l'accord (Fa : Fa La Do) : on règle le type, le sens, Maj / Min et les tierces.",
-      "Appui long sur ce rond : tu entends l'accord, tant que tu appuies.",
+      "Touche le grand rond : 1re ligne Do, Ré… ; 2e ligne Parfait, 7, 9… ; 3e ligne Maj, Min et les tierces. Fais défiler les lignes au doigt.",
+      "Maintiens ce rond 0,35 s pour entendre l'accord. Le son continue tant que tu appuies et s'arrête au relâchement.",
     ],
   },
   {

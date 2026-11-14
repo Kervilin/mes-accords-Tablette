@@ -504,115 +504,171 @@ function Joystick({
    ============================================================ */
 /* ============================================================
    Carte de l'accord (le grand rond central)
-   - toucher court  → ouvre le réglage (types, sens, majeur/mineur, tierces)
+   - toucher court  → ouvre le réglage (fondamentale, mode, majeur/mineur, tierces)
    - appui long     → joue l'accord tant que le doigt reste posé
    ============================================================ */
 function ChordCard(p: {
   style: CSSProperties;
   interactive: boolean;
   onOpen?: () => void;
+  onPressStart?: () => void;
   onHoldStart?: () => void;
   onHoldEnd?: () => void;
   children: React.ReactNode;
 }) {
+  const callbacks = useRef(p);
+  callbacks.current = p;
   const timer = useRef<number | null>(null);
-  const down = useRef(false);
+  const tapTimer = useRef<number | null>(null);
+  const down = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    bounds: DOMRect;
+    target: HTMLButtonElement;
+  } | null>(null);
   const held = useRef(false);
   const skipClick = useRef(false);
-  const origin = useRef({ x: 0, y: 0 });
-  const [pressed, setPressed] = useState(false);
-  const clear = () => {
-    if (timer.current !== null) {
-      window.clearTimeout(timer.current);
-      timer.current = null;
-    }
+  const [visual, setVisual] = useState<"idle" | "pressed" | "holding">("idle");
+
+  const clearTimer = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
   };
-  const endHold = () => {
-    if (!held.current) return;
-    held.current = false;
-    p.onHoldEnd?.();
+  const clearTap = () => {
+    if (tapTimer.current !== null) window.clearTimeout(tapTimer.current);
+    tapTimer.current = null;
   };
-  const onDown = (e: RPointerEvent<HTMLDivElement>) => {
-    if (!p.interactive || down.current) return;
-    origin.current = { x: e.clientX, y: e.clientY };
-    down.current = true;
+  const finish = (updateVisual = true) => {
+    const press = down.current;
+    down.current = null;
+    clearTimer();
+    const wasHeld = held.current;
     held.current = false;
+    if (wasHeld) callbacks.current.onHoldEnd?.();
+    if (updateVisual) setVisual("idle");
+    try {
+      if (press?.target.hasPointerCapture(press.id)) press.target.releasePointerCapture(press.id);
+    } catch { /* The browser may already have released capture. */ }
+    return wasHeld;
+  };
+  const cancel = (updateVisual = true) => {
+    skipClick.current = true;
+    clearTap();
+    finish(updateVisual);
+  };
+  const cancelRef = useRef(cancel);
+  cancelRef.current = cancel;
+
+  useEffect(() => {
+    const onBlur = () => cancelRef.current();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") cancelRef.current();
+    };
+    const onOtherPointer = (event: PointerEvent) => {
+      if (down.current && event.pointerId !== down.current.id) cancelRef.current();
+    };
+    const onOutsideRelease = (event: PointerEvent) => {
+      if (down.current?.id === event.pointerId) cancelRef.current();
+    };
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("pointerdown", onOtherPointer, true);
+    window.addEventListener("pointerup", onOutsideRelease);
+    window.addEventListener("pointercancel", onOutsideRelease);
+    return () => {
+      cancelRef.current(false);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("pointerdown", onOtherPointer, true);
+      window.removeEventListener("pointerup", onOutsideRelease);
+      window.removeEventListener("pointercancel", onOutsideRelease);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!p.interactive) cancelRef.current();
+  }, [p.interactive]);
+
+  const open = () => {
+    clearTap();
+    if (!callbacks.current.interactive || skipClick.current) return;
+    skipClick.current = true;
+    callbacks.current.onOpen?.();
+  };
+  const onDown = (event: RPointerEvent<HTMLButtonElement>) => {
+    if (!p.interactive || down.current || event.isPrimary === false || event.button !== 0) return;
+    clearTap();
+    clearTimer();
     skipClick.current = false;
-    setPressed(true);
-    clear();
+    held.current = false;
+    down.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      bounds: event.currentTarget.getBoundingClientRect(),
+      target: event.currentTarget,
+    };
+    // Resume Web Audio during the user gesture, not later inside the timeout.
+    p.onPressStart?.();
+    setVisual("pressed");
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch { /* Older WebViews still have the window release listener. */ }
     timer.current = window.setTimeout(() => {
       timer.current = null;
-      if (!down.current) return;
+      if (!down.current || !callbacks.current.interactive) return;
       held.current = true;
       skipClick.current = true;
-      buzz(8);
-      p.onHoldStart?.();
+      setVisual("holding");
+      callbacks.current.onHoldStart?.();
     }, 350);
   };
-  const onUp = (e: RPointerEvent<HTMLDivElement>) => {
-    if (!down.current) return;
-    down.current = false;
-    setPressed(false);
-    clear();
-    if (held.current) endHold();
-    else if (!skipClick.current && e.pointerType !== "mouse") {
-      // Mobile WebViews may never synthesize a click after a touch. Open now.
-      skipClick.current = true;
-      p.onOpen?.();
-    }
+  const onUp = (event: RPointerEvent<HTMLButtonElement>) => {
+    if (down.current?.id !== event.pointerId) return;
+    const wasHeld = finish();
+    if (wasHeld || skipClick.current) return;
+    // Usually the native button click opens the dialog. This fallback also
+    // covers Android WebViews that omit that click after a touch release.
+    if (event.pointerType !== "mouse") tapTimer.current = window.setTimeout(open, 80);
   };
-  const onLeave = () => {
-    if (!down.current) return;
-    down.current = false;
-    skipClick.current = true;
-    setPressed(false);
-    clear();
-    endHold();
-  };
-  // le doigt ou la souris quitte la carte : on arrête le son
-  const onOut = (e: RPointerEvent<HTMLDivElement>) => {
-    const to = e.relatedTarget as Node | null;
-    if (to && e.currentTarget.contains(to)) return;
-    onLeave();
-  };
-  // passage en édition (carte inactive) : on repart de zéro
-  useEffect(() => {
-    if (!p.interactive) onLeave();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.interactive]);
   return (
-    <div
-      className={cs("chord-card", pressed && p.interactive && "chord-card-pressed")}
+    <button
+      type="button"
+      className={cs("chord-card", visual !== "idle" && "chord-card-pressed", visual === "holding" && "chord-card-sounding")}
       style={p.style}
-      role={p.interactive ? "button" : undefined}
-      tabIndex={p.interactive ? 0 : -1}
+      disabled={!p.interactive}
+      aria-haspopup="dialog"
       aria-label={p.interactive ? "Accord : toucher pour régler, appui long pour l'entendre" : undefined}
       onPointerDown={onDown}
-      onPointerMove={(e) => {
-        if (!down.current || held.current) return;
-        if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 12) {
-          clear();
-          skipClick.current = true;
-        }
+      onPointerMove={(event) => {
+        const press = down.current;
+        if (!press || press.id !== event.pointerId) return;
+        const { left, right, top, bottom } = press.bounds;
+        const outside = event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom;
+        const moving = !held.current && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 12;
+        if (outside || moving) cancel();
       }}
       onPointerUp={onUp}
-      onPointerCancel={onLeave}
-      onPointerOut={onOut}
-      onPointerLeave={onLeave}
-      onClick={() => {
-        if (!p.interactive || skipClick.current) return;
-        p.onOpen?.();
+      onPointerCancel={() => cancel()}
+      onLostPointerCapture={(event) => {
+        if (down.current?.id === event.pointerId) cancel();
       }}
-      onContextMenu={(e) => e.preventDefault()}
-      onKeyDown={(e) => {
-        if (p.interactive && (e.key === "Enter" || e.key === " ")) {
-          e.preventDefault();
-          p.onOpen?.();
+      onClick={(event) => {
+        event.stopPropagation();
+        open();
+      }}
+      onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.stopPropagation();
+          if (event.repeat) event.preventDefault();
+          else skipClick.current = false;
         }
       }}
     >
       {p.children}
-    </div>
+    </button>
   );
 }
 
@@ -712,6 +768,7 @@ export type KeyboardViewProps = {
   onMenu?: () => void;
   /** carte de l'accord : toucher = réglage, appui long = son tenu */
   onCardOpen?: () => void;
+  onCardPressStart?: () => void;
   onCardHoldStart?: () => void;
   onCardHoldEnd?: () => void;
 };
@@ -989,6 +1046,7 @@ export function KeyboardView(p: KeyboardViewProps) {
         <ChordCard
           interactive={!edit}
           onOpen={p.onCardOpen}
+          onPressStart={p.onCardPressStart}
           onHoldStart={p.onCardHoldStart}
           onHoldEnd={p.onCardHoldEnd}
           style={V({

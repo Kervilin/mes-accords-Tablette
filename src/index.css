@@ -286,6 +286,15 @@ kbd {
 .chord-card-pressed {
   transform: scale(0.97);
 }
+.chord-card > span {
+  pointer-events: none;
+}
+.chord-card-sounding .cc-name {
+  color: var(--c-sel);
+}
+.chord-card:disabled {
+  cursor: default;
+}
 .cc-name {
   font-family: var(--f-display);
   font-weight: 800;
@@ -309,6 +318,76 @@ kbd {
 .cc-sep {
   color: var(--c-bd);
   padding: 0 0.22em;
+}
+
+.chord-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(5, 8, 12, 0.58);
+  backdrop-filter: blur(3px);
+}
+.chord-picker {
+  width: 100%;
+  max-width: 760px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  padding: 12px;
+  overflow-y: auto;
+}
+.chord-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.chord-picker-heading h2 {
+  font-family: var(--f-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+.chord-picker-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  padding: 0;
+}
+.chord-picker-row {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 3px 1px 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-bd) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.chord-picker-option {
+  flex: 0 0 auto;
+  min-width: 50px;
+  min-height: 46px;
+  white-space: nowrap;
+}
+.chord-picker-quality {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+.chord-picker-quality .ch {
+  min-height: 46px;
+  padding: 0 6px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 /* boutons ronds */

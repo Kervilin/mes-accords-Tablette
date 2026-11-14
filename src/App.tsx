@@ -4,7 +4,7 @@ import { Icon, Reveal, Toast } from "@/components/Chrome";
 import { DiagSheet, FullscreenHint, IconSheet, InstallSheet } from "@/components/Mobile";
 import { ChordMenu, HelpSheet } from "@/components/Help";
 import { ChordPicker } from "@/components/ChordPicker";
-import { blip, holdChord, playChord, stopChord } from "@/lib/audio";
+import { blip, holdChord, playChord, prepareAudio, stopChord } from "@/lib/audio";
 import { autoFullscreenOnFirstGesture, exitFullscreen, isStandaloneMode, loadFsAuto, saveFsAuto, useFullscreen } from "@/lib/fullscreen";
 import { registerSW, useInstall, usePwaStatus } from "@/lib/pwa";
 import { isNative, nativeFullscreen, onAndroidBack } from "@/lib/native";
@@ -162,6 +162,7 @@ export default function App() {
   const stripRef = useRef<HTMLDivElement | null>(null);
   const toastTimer = useRef<number | null>(null);
   const playTimer = useRef<number | null>(null);
+  const cardSound = useRef(false);
 
   /* micro */
   const micRef = useRef<{
@@ -465,11 +466,34 @@ export default function App() {
   useEffect(() => () => stopMic(), [stopMic]);
 
   /* ---------- lecture audio ---------- */
+  const stopPlayback = useCallback(() => {
+    if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+    playTimer.current = null;
+    cardSound.current = false;
+    stopChord();
+    setPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") stopPlayback();
+    };
+    window.addEventListener("blur", stopPlayback);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("blur", stopPlayback);
+      document.removeEventListener("visibilitychange", onHidden);
+      if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+      stopChord();
+    };
+  }, [stopPlayback]);
+
+  const soundingNotes = vm.playMidis.join(",");
+  useEffect(() => stopPlayback(), [soundingNotes, !!edit, stopPlayback]);
+
   const togglePlay = useCallback(() => {
     if (playing) {
-      stopChord();
-      setPlaying(false);
-      if (playTimer.current) window.clearTimeout(playTimer.current);
+      stopPlayback();
       return;
     }
     if (!vm.playMidis.length) {
@@ -477,10 +501,12 @@ export default function App() {
       return;
     }
     if (playChord(vm.playMidis)) {
+      if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+      cardSound.current = false;
       setPlaying(true);
-      playTimer.current = window.setTimeout(() => setPlaying(false), 2000);
+      playTimer.current = window.setTimeout(stopPlayback, 2000);
     } else toast("Audio indisponible sur ce navigateur.");
-  }, [playing, vm.playMidis, toast]);
+  }, [playing, vm.playMidis, toast, stopPlayback]);
 
   /* ---------- plein écran ---------- */
   const toggleFullscreen = useCallback(async () => {
@@ -517,11 +543,15 @@ export default function App() {
   };
   /** appui long sur la carte : l'accord sonne tant que le doigt reste posé */
   const cardHoldStart = () => {
+    stopPlayback();
     if (vm.none || !vm.playMidis.length) return;
-    setPlaying(false);
-    holdChord(vm.playMidis);
+    cardSound.current = holdChord(vm.playMidis);
+    setPlaying(cardSound.current);
+    if (!cardSound.current) toast("Audio indisponible sur ce navigateur.");
   };
-  const cardHoldEnd = () => stopChord();
+  const cardHoldEnd = () => {
+    if (cardSound.current) stopPlayback();
+  };
 
   const setDir = (d: 0 | 1) => {
     setS((s) => ({ ...s, dir: d }));
@@ -1257,6 +1287,7 @@ export default function App() {
             onCardOpen={() => {
               if (!edit) setPicker(true);
             }}
+            onCardPressStart={prepareAudio}
             onCardHoldStart={cardHoldStart}
             onCardHoldEnd={cardHoldEnd}
           />
@@ -1653,15 +1684,24 @@ export default function App() {
 
       <ChordPicker
         open={picker}
+        root={S.root}
         enr={S.enr}
-        dir={S.dir}
         mode={S.mode}
         isSym={isSym(S.enr)}
         tierces={S.tierces}
-        onEnr={(v) => setS((st) => ({ ...st, enr: v, low: null, more: false }))}
-        onDir={(d) => setDir(d)}
+        onRoot={(value) => {
+          setManual(null);
+          setS((st) => ({ ...st, root: value, low: null }));
+        }}
+        onEnr={(v) => {
+          setManual(null);
+          setS((st) => ({ ...st, enr: v, low: null, more: false }));
+        }}
         onMode={(m) => {
-          if (!isSym(S.enr)) setS((st) => ({ ...st, mode: m, low: null }));
+          if (!isSym(S.enr)) {
+            setManual(null);
+            setS((st) => ({ ...st, mode: m, low: null }));
+          }
         }}
         onTierces={toggleTierces}
         onClose={() => setPicker(false)}

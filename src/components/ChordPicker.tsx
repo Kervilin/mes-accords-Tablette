@@ -1,130 +1,141 @@
+import { useEffect, useRef } from "react";
 import { Icon } from "@/components/Chrome";
-import { MAIN, OTH } from "@/lib/music";
+import { MAIN, N, OTH, nm } from "@/lib/music";
 
-/* ============================================================
-   Réglage de l'accord, ouvert par un toucher sur le grand rond :
-     1re ligne : types d'accord (Parfait, 7, 9, 5, sus2…)
-     2e ligne  : sens (Poussé / Tiré)
-     3e ligne  : Maj, Min, et Tierces (Sans tierce / Avec tierces)
-   ============================================================ */
+const TYPES: [string, string][] = [...MAIN, ...OTH];
+
 export function ChordPicker({
   open,
+  root,
   enr,
-  dir,
   mode,
   isSym,
   tierces,
+  onRoot,
   onEnr,
-  onDir,
   onMode,
   onTierces,
   onClose,
 }: {
   open: boolean;
+  root: number;
   enr: string;
-  dir: 0 | 1;
   mode: "maj" | "min";
   isSym: boolean;
   tierces: boolean;
+  onRoot: (value: number) => void;
   onEnr: (v: string) => void;
-  onDir: (d: 0 | 1) => void;
   onMode: (m: "maj" | "min") => void;
   onTierces: () => void;
   onClose: () => void;
 }) {
-  if (!open) return null;
-  const types: [string, string][] = [...MAIN, ...OTH];
+  const panelRef = useRef<HTMLDivElement>(null);
+  const rootRowRef = useRef<HTMLDivElement>(null);
+  const modeRowRef = useRef<HTMLDivElement>(null);
 
-  const chip = (on: boolean, disabled = false) => ({
-    background: on ? "var(--c-sel)" : "var(--c-card)",
-    borderColor: on ? "var(--c-sel)" : "var(--c-bd)",
-    color: on ? "var(--c-selt)" : "var(--c-tx)",
-    opacity: disabled ? 0.35 : 1,
-  });
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus({ preventScroll: true });
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    // Keep each selection visible in its single, horizontally scrollable row.
+    for (const row of [rootRowRef.current, modeRowRef.current]) {
+      const selected = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (row && selected) {
+        row.scrollLeft = selected.offsetLeft - (row.clientWidth - selected.offsetWidth) / 2;
+      }
+    }
+  }, [open, root, enr]);
+
+  if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center"
-      style={{ background: "color-mix(in oklab, #05080c 55%, transparent)", backdropFilter: "blur(3px)" }}
-      onClick={onClose}
+      className="chord-picker-backdrop"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
       <div
-        className="sheet-in panel w-full max-w-[460px] p-3"
+        ref={panelRef}
+        className="sheet-in panel chord-picker"
         role="dialog"
         aria-modal="true"
-        aria-label="Réglage de l'accord"
-        onClick={(e) => e.stopPropagation()}
-        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom,0px))" }}
+        aria-labelledby="chord-picker-title"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+          } else if (event.key === "Tab") {
+            const buttons = panelRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+            if (!buttons?.length) return;
+            const first = buttons[0];
+            const last = buttons[buttons.length - 1];
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          }
+        }}
       >
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--c-mu)" }}>
-            Réglage de l'accord
-          </p>
+        <div className="chord-picker-heading">
+          <h2 id="chord-picker-title">Choisir un accord</h2>
           <button
             type="button"
             aria-label="Fermer"
-            className="grid h-8 w-8 place-items-center rounded-full border"
-            style={{ borderColor: "var(--c-bd)", color: "var(--c-mu)" }}
+            className="ch chord-picker-close"
             onClick={onClose}
           >
             <Icon n="close" />
           </button>
         </div>
 
-        {/* 1re ligne : types d'accord */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {types.map(([v, l]) => (
+        <div ref={rootRowRef} className="chord-picker-row" role="group" aria-label="Fondamentale de l'accord">
+          {N.map((note, value) => (
             <button
-              key={v}
+              key={note}
               type="button"
-              className="ch min-h-[46px] text-[15px] font-bold"
-              style={chip(enr === v)}
-              aria-pressed={enr === v}
-              onClick={() => onEnr(v)}
+              className={`ch chord-picker-option${root === value ? " on" : ""}`}
+              aria-pressed={root === value}
+              onClick={() => onRoot(value)}
             >
-              {l}
+              {nm(note)}
             </button>
           ))}
         </div>
 
-        {/* 2e ligne : sens */}
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            className="ch min-h-[46px] text-[15px] font-bold"
-            style={{
-              ...chip(dir === 0),
-              background: dir === 0 ? "var(--c-org)" : "var(--c-card)",
-              borderColor: dir === 0 ? "var(--c-org)" : "var(--c-bd)",
-              color: dir === 0 ? "#1b1005" : "var(--c-tx)",
-            }}
-            aria-pressed={dir === 0}
-            onClick={() => onDir(0)}
-          >
-            Poussé
-          </button>
-          <button
-            type="button"
-            className="ch min-h-[46px] text-[15px] font-bold"
-            style={{
-              ...chip(dir === 1),
-              background: dir === 1 ? "var(--c-yel)" : "var(--c-card)",
-              borderColor: dir === 1 ? "var(--c-yel)" : "var(--c-bd)",
-              color: dir === 1 ? "#1b1503" : "var(--c-tx)",
-            }}
-            aria-pressed={dir === 1}
-            onClick={() => onDir(1)}
-          >
-            Tiré
-          </button>
+        <div ref={modeRowRef} className="chord-picker-row" role="group" aria-label="Mode de l'accord">
+          {TYPES.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`ch chord-picker-option${enr === value ? " on" : ""}`}
+              aria-pressed={enr === value}
+              onClick={() => onEnr(value)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* 3e ligne : Maj, Min, tierces */}
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <div className="chord-picker-quality" role="group" aria-label="Majeur, mineur et tierces">
           <button
             type="button"
-            className="ch min-h-[46px] text-[15px] font-bold"
-            style={chip(mode === "maj" && !isSym, isSym)}
+            className={`ch${mode === "maj" && !isSym ? " on" : ""}`}
             disabled={isSym}
             aria-pressed={mode === "maj" && !isSym}
             onClick={() => onMode("maj")}
@@ -133,8 +144,7 @@ export function ChordPicker({
           </button>
           <button
             type="button"
-            className="ch min-h-[46px] text-[15px] font-bold"
-            style={chip(mode === "min" && !isSym, isSym)}
+            className={`ch${mode === "min" && !isSym ? " on" : ""}`}
             disabled={isSym}
             aria-pressed={mode === "min" && !isSym}
             onClick={() => onMode("min")}
@@ -143,10 +153,9 @@ export function ChordPicker({
           </button>
           <button
             type="button"
-            className="ch min-h-[46px] text-[14px] font-bold"
-            style={chip(tierces)}
+            className={`ch${tierces ? " on" : ""}`}
             aria-pressed={tierces}
-            title="Tierces : accords de gauche à 3 notes"
+            title="Tierces des accords de la main gauche"
             onClick={onTierces}
           >
             {tierces ? "Avec tierce" : "Sans tierce"}
