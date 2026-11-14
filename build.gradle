@@ -1,0 +1,100 @@
+apply plugin: 'com.android.application'
+
+/* ------------------------------------------------------------------
+   Signature : toujours la MÊME clé, pour pouvoir mettre à jour l'appli
+   sans la désinstaller (et sans perdre les claviers enregistrés).
+
+   La clé est conservée sous forme de TEXTE (une ligne « motdepasse:base64 ») :
+     - sur GitHub : secret CLE_ANDROID
+     - sur le PC  : fichier _PRIVE_cle-android/CLE_ANDROID.txt
+   Elle est décodée ici dans un fichier temporaire (android/.cle-temp/).
+   ------------------------------------------------------------------ */
+def cleText = System.getenv("CLE_ANDROID")
+def cleFile = rootProject.file("../_PRIVE_cle-android/CLE_ANDROID.txt")
+if (!cleText && cleFile.exists()) cleText = cleFile.getText("UTF-8")
+cleText = cleText?.trim()
+def cleStore = null
+def clePass = null
+if (cleText && cleText.contains(":")) {
+    int sep = cleText.indexOf(":")
+    clePass = cleText.substring(0, sep)
+    cleStore = rootProject.file(".cle-temp/mes-accords.p12")
+    cleStore.parentFile.mkdirs()
+    cleStore.bytes = cleText.substring(sep + 1).replaceAll("\\s", "").decodeBase64()
+    logger.lifecycle("Signature : clé « Mes accords » ✔")
+} else {
+    logger.warn("Signature : clé absente → APK de test (impossible à mettre à jour par-dessus).")
+}
+
+/* Numéro de version : VERSION_CODE (ex. n° de compilation GitHub) sinon 1 ;
+   il doit augmenter à chaque nouvelle version pour qu'Android accepte la mise à jour. */
+def appVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInteger()
+def appVersionName = (System.getenv("VERSION_NAME") ?: "1.0.${appVersionCode}").toString()
+
+android {
+    namespace "fr.mesaccords.app"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "fr.mesaccords.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        mesaccords {
+            if (cleStore) {
+                storeFile cleStore
+                storeType "pkcs12"
+                storePassword clePass
+                keyAlias "mesaccords"
+                keyPassword clePass
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (cleStore) signingConfig signingConfigs.mesaccords
+        }
+        debug {
+            if (cleStore) signingConfig signingConfigs.mesaccords
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

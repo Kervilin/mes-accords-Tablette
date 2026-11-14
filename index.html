@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5" />
+    <meta name="theme-color" content="#0f141b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#e9edf3" media="(prefers-color-scheme: light)" />
+    <meta
+      name="description"
+      content="Mes accords — visualiseur d'accords et éditeur de clavier pour accordéon diatonique : basses, boutons main droite, poussé/tiré, import/export CSV et accordage au micro. Application mobile installable, utilisable hors-ligne."
+    />
+    <title>Mes accords · accordéon diatonique</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Mes accords" />
+    <meta name="application-name" content="Mes accords" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Patrick+Hand&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!--
+      Vérification du moteur web (écrite en JavaScript ancien, volontairement) :
+      l'appli a besoin de Chrome / WebView 111 ou plus. Sur une vieille tablette
+      (ex. Android 7, Chrome non mis à jour), on affiche un message clair au lieu
+      d'un écran cassé.
+    -->
+    <script>
+      (function () {
+        var ok = false;
+        try {
+          ok = !!(window.CSS && CSS.supports && CSS.supports("color", "color-mix(in srgb, red, blue)"));
+        } catch (e) {}
+        if (ok) return;
+        var m = /Chrome\/(\d+)/.exec(navigator.userAgent || "");
+        var ver = m ? m[1] : "inconnue";
+        var android = /Android\s([\d.]+)/.exec(navigator.userAgent || "");
+        var ios = /iPhone|iPad|iPod/.test(navigator.userAgent || "");
+        var root = document.getElementById("root");
+        if (root) root.style.display = "none";
+        var box = document.createElement("div");
+        box.setAttribute("style",
+          "font-family:sans-serif;background:#0f141b;color:#eef3f9;min-height:100vh;" +
+          "padding:28px 22px;line-height:1.5;font-size:17px;box-sizing:border-box");
+        box.innerHTML =
+          "<h1 style='font-size:24px;margin:0 0 14px'>Mise à jour nécessaire</h1>" +
+          "<p>Le moteur d'affichage de cet appareil est trop ancien pour « Mes accords »" +
+          " (version actuelle : <b>" + ver + "</b>, il faut <b>111 ou plus</b>" +
+          (android ? ", Android " + android[1] : "") + ").</p>" +
+          "<p style='margin-top:16px'><b>Pour corriger :</b></p>" +
+          (ios
+            ? "<ol style='padding-left:22px'>" +
+              "<li>Ouvrez <b>Réglages → Général → Mise à jour logicielle</b>.</li>" +
+              "<li>Installez la mise à jour proposée (iOS 16.4 ou plus nécessaire).</li>" +
+              "<li>Rouvrez « Mes accords ».</li></ol>"
+            : "<ol style='padding-left:22px'>" +
+              "<li>Ouvrez le <b>Play Store</b>.</li>" +
+              "<li>Cherchez <b>Google Chrome</b> et touchez <b>Mettre à jour</b>.</li>" +
+              "<li>Cherchez aussi <b>Android System WebView</b> et mettez-le à jour s'il est proposé.</li>" +
+              "<li>Fermez puis rouvrez « Mes accords ».</li>" +
+              "</ol>" +
+              "<p style='color:#93a1b4;font-size:15px'>Sur Android 7, Chrome peut monter jusqu'à la version 119 : c'est suffisant.</p>") +
+          "<button id='ma-force' style='margin-top:18px;padding:12px 18px;font-size:16px;" +
+          "border-radius:10px;border:1px solid #2c3949;background:#1a222d;color:#eef3f9'>" +
+          "Ouvrir quand même</button>";
+        document.body.appendChild(box);
+        document.getElementById("ma-force").onclick = function () {
+          box.parentNode.removeChild(box);
+          if (root) root.style.display = "";
+        };
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

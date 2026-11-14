@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mes accords — Guide d'installation (PWA)</title>
+<style>
+  :root{
+    --ink:#1a2230; --muted:#5c6878; --line:#d6dde7; --bg:#f4f6f9;
+    --red:#c22a44; --yellow:#ffc21a; --green:#15803d; --card:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.55 "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",sans-serif;}
+  .page{max-width:800px;margin:0 auto;padding:28px 20px 60px}
+  header.hero{background:#0f141b;color:#f2f5f9;border-radius:18px;padding:26px 24px;
+    background-image:radial-gradient(500px 200px at 10% 0%,rgba(255,210,63,.25),transparent 70%),
+    radial-gradient(500px 220px at 95% 10%,rgba(255,122,53,.22),transparent 70%);}
+  header.hero h1{margin:0;font-size:30px;letter-spacing:-.5px}
+  header.hero p{margin:8px 0 0;color:#b9c4d2}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .badge{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+    border-radius:999px;padding:4px 12px;font-size:13px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:12px;padding:11px 18px;font:600 15px inherit;cursor:pointer}
+  .btn.primary{background:var(--red);border-color:var(--red);color:#fff}
+  .btn:hover{filter:brightness(1.05)}
+  section.card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:18px 20px;margin:14px 0}
+  h2{margin:0 0 10px;font-size:20px;letter-spacing:-.3px}
+  h2 .num{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;
+    background:var(--ink);color:#fff;font-size:15px;margin-right:8px;vertical-align:2px}
+  h2.red .num{background:var(--red)}
+  h3{margin:16px 0 6px;font-size:16px}
+  ol,ul{margin:8px 0;padding-left:22px}
+  li{margin:5px 0}
+  li.task{list-style:none;margin-left:-22px;padding-left:30px;position:relative}
+  li.task::before{content:"";position:absolute;left:2px;top:5px;width:15px;height:15px;
+    border:2px solid var(--muted);border-radius:4px;background:#fff}
+  code{background:#eef1f6;border:1px solid var(--line);border-radius:6px;
+    padding:0 6px;font:13.5px ui-monospace,Menlo,Consolas,monospace}
+  pre{background:#0f141b;color:#e8edf4;border-radius:12px;padding:12px 14px;
+    overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#eef1f6}
+  .warn{background:#fff7e6;border:1px solid #ecd27a;border-radius:12px;padding:10px 14px;
+    font-size:14px;margin-top:10px}
+  .ok{background:#ecfdf3;border:1px solid #86d6a4;border-radius:12px;padding:10px 14px;
+    font-size:14px;margin-top:10px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .fill{border:1px dashed var(--muted);border-radius:8px;min-height:26px;margin-top:4px}
+  .memo{font:13.5px/1.7 ui-monospace,Menlo,Consolas,monospace}
+  footer{color:var(--muted);font-size:13px;text-align:center;margin-top:24px}
+  @media(max-width:560px){.cols{grid-template-columns:1fr}}
+  @media print{
+    body{background:#fff;font-size:12.5px;line-height:1.5}
+    .page{max-width:none;padding:0}
+    .toolbar,.noprint{display:none!important}
+    section.card{break-inside:avoid;border-color:#bbb;box-shadow:none;margin:10px 0;padding:12px 14px}
+    header.hero{border-radius:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    h2{font-size:16px}
+    pre{font-size:11px}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <h1>🪗 Mes accords — Guide d'installation</h1>
+  <p>Ouvrir l'appli <b>en plein écran</b> depuis <b>son icône</b>, comme une vraie appli.</p>
+  <div class="badges">
+    <span class="badge">⏱ 5 min la 1ʳᵉ fois</span>
+    <span class="badge">💰 Gratuit</span>
+    <span class="badge">📦 Aucun logiciel à installer</span>
+  </div>
+</header>
+
+<div class="toolbar noprint">
+  <button class="btn primary" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button>
+  <button class="btn" onclick="location.href='./'">← Retour à l'appli</button>
+</div>
+
+<section class="card">
+  <h2><span class="num">?</span>À comprendre en 30 secondes</h2>
+  <ul>
+    <li>Une PWA <b>ne s'installe pas depuis un fichier</b> : il faut une adresse <b>https://</b>.</li>
+    <li><b>Onglet ≠ appli installée.</b> L'icône et le plein écran n'existent que si tu lances l'appli <b>depuis son icône</b>.</li>
+    <li>L'icône est enregistrée <b>au moment où tu installes</b> : pour en changer → <b>désinstaller + réinstaller</b>.</li>
+    <li><b>iPhone :</b> Apple interdit le plein écran total aux applis web → le max = <b>sans barre d'adresse</b>. <b>Android :</b> vrai plein écran.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2><span class="num">✎</span>Ma fiche (à remplir au stylo)</h2>
+  <div class="cols">
+    <div>Mon adresse Netlify :<div class="fill"></div></div>
+    <div>Date d'installation :<div class="fill"></div></div>
+    <div>Icône : ☐ Nuit &nbsp;☐ Papier &nbsp;☐ Laiton &nbsp;☐ Perso</div>
+    <div>Téléphone : ☐ Android &nbsp;☐ iPhone &nbsp;&nbsp; Cache sw.js : v………</div>
+  </div>
+</section>
+
+<section class="card">
+  <h2 class="red"><span class="num">1</span>Télécharger le paquet (dans l'appli)</h2>
+  <ol>
+    <li class="task">Sous le clavier : <b>« Installer l'appli sur mon téléphone »</b>.</li>
+    <li class="task">Bouton rouge <b>« Télécharger mes-accords-pwa.zip »</b> → tu obtiens un fichier ZIP (~450 Ko).</li>
+  </ol>
+  <div class="ok">Le ZIP contient déjà tout : l'appli, l'icône choisie, le mode plein écran, le hors-ligne.</div>
+</section>
+
+<section class="card">
+  <h2><span class="num">2</span>Mettre en ligne (gratuit, 2 min)</h2>
+  <ol>
+    <li class="task">Va sur <b>https://app.netlify.com/drop</b> (ordinateur ou téléphone).</li>
+    <li class="task"><b>Glisse le fichier ZIP</b> dans la grande zone.</li>
+    <li class="task">Attends « Site is live » → <b>note l'adresse</b> : <code>https://….netlify.app</code>.</li>
+    <li class="task">Ouvre cette adresse une fois pour vérifier.</li>
+  </ol>
+  <div class="warn">Astuce : crée un compte Netlify gratuit pour garder le site, le renommer et le mettre à jour (« Deploy manually »).</div>
+</section>
+
+<section class="card">
+  <h2><span class="num">3</span>Installer sur le téléphone</h2>
+  <h3>Android (Chrome, Edge, Samsung Internet)</h3>
+  <ol>
+    <li class="task">Ouvre l'adresse <code>https://…</code> <b>dans Chrome</b>.</li>
+    <li class="task">Menu <b>⋮</b> → <b>« Installer l'application »</b>.</li>
+    <li class="task">Confirme <b>Installer</b> → l'icône apparaît.</li>
+  </ol>
+  <h3>iPhone / iPad (Safari obligatoirement)</h3>
+  <ol>
+    <li class="task">Ouvre l'adresse <b>dans Safari</b> (pas Chrome ni Firefox).</li>
+    <li class="task">Bouton <b>Partager</b> (carré + flèche, en bas).</li>
+    <li class="task"><b>« Sur l'écran d'accueil »</b> → <b>Ajouter</b>.</li>
+  </ol>
+  <h3>Ordinateur (Chrome / Edge)</h3>
+  <ol>
+    <li class="task">Ouvre l'adresse → icône <b>écran + flèche</b> dans la barre d'adresse, ou menu ⋮ → Installer.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2><span class="num">4</span>Lancer en plein écran</h2>
+  <ol>
+    <li class="task"><b>Ferme l'onglet</b> du navigateur.</li>
+    <li class="task">Lance l'appli <b>depuis sa nouvelle icône</b>.</li>
+    <li class="task">Touche l'écran une fois → sur Android la barre d'état disparaît.</li>
+  </ol>
+  <div class="ok">Plus de barre d'adresse = c'est gagné. Le bouton <b>⤢</b> (ou <b>F</b>) bascule le plein écran. Sur Android, l'écran reste allumé pendant le jeu.</div>
+</section>
+
+<section class="card">
+  <h2><span class="num">⌨</span>Utiliser sur ordinateur</h2>
+  <p style="margin:0">Même appli, plus confortable : grand écran, souris, clavier physique.</p>
+  <table>
+    <tr><th>Touche</th><th>Action</th></tr>
+    <tr><td>← / →</td><td>Tiré / Poussé</td></tr>
+    <tr><td>1 – 9</td><td>Parfait, sus2, add9, sus4, 5, 6, 7m, 7M, 9</td></tr>
+    <tr><td>+ / −</td><td>Majeur / Mineur</td></tr>
+    <tr><td>Espace / E / F / Échap</td><td>Écouter / Éditer / Plein écran / Raz</td></tr>
+    <tr><td>0 / Suppr (édition)</td><td>Pas de note / Efface les 2 sens</td></tr>
+  </table>
+  <div class="warn"><b>PC et téléphone ne partagent rien.</b> Pour transférer un clavier : <b>Export</b> (CSV) sur l'un → <b>Import</b> sur l'autre.</div>
+</section>
+
+<section class="card">
+  <h2><span class="num">5</span>Changer d'icône (la prochaine fois)</h2>
+  <ol>
+    <li class="task">Appli → <b>« Changer l'icône de l'appli »</b> → Nuit / Papier / Laiton.</li>
+    <li class="task"><b>« Télécharger le paquet avec l'icône … »</b> → nouveau ZIP.</li>
+    <li class="task">Netlify → ton site → <b>Deploys → Deploy manually</b> → glisse le nouveau ZIP.</li>
+    <li class="task">Téléphone : <b>appui long sur l'icône → Désinstaller</b>.</li>
+    <li class="task">Rouvre l'adresse → <b>réinstalle</b> → nouvelle icône ✔</li>
+  </ol>
+  <div class="warn">Sans désinstaller/réinstaller, l'ancienne icône reste : c'est le téléphone qui la met en cache. Si besoin : Paramètres → Applications → Mes accords → Stockage → <b>Vider le cache</b>.</div>
+  <h3>Ma propre image</h3>
+  <pre>bash deploy/make-icons.sh mon-image.png
+npm run build
+bash deploy/check-pwa.sh   # doit dire « Tout est prêt »</pre>
+</section>
+
+<section class="card">
+  <h2><span class="num">6</span>Sauvegarder les claviers (important)</h2>
+  <ul>
+    <li>Les claviers sont <b>dans le téléphone</b>, pas sur internet.</li>
+    <li>Régulièrement : bouton <b>Export</b> → garde le fichier <code>clavier.csv</code>.</li>
+    <li>Restauration / nouveau téléphone : bouton <b>Import</b> → choisir le CSV.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2><span class="num">7</span>Dépannage express</h2>
+  <table>
+    <tr><th>Symptôme</th><th>Cause probable</th><th>Solution</th></tr>
+    <tr><td>Pas d'icône</td><td>jamais installée, juste ouverte</td><td>étape 3, lancer depuis l'icône</td></tr>
+    <tr><td>Icône générique (lettre)</td><td>manifest/icons absents du site</td><td>redéployer <b>tout</b> le ZIP</td></tr>
+    <tr><td>Pas de plein écran (Android)</td><td>lancée depuis un onglet</td><td>fermer l'onglet, lancer depuis l'icône</td></tr>
+    <tr><td>Pas de plein écran (iPhone)</td><td>normal, Apple l'interdit</td><td>max = sans barre d'adresse</td></tr>
+    <tr><td>Ancienne icône</td><td>cache d'installation</td><td>désinstaller → réinstaller</td></tr>
+    <tr><td>Pas d'option d'ajout (iPhone)</td><td>pas dans Safari</td><td>rouvrir <b>dans Safari</b></td></tr>
+    <tr><td>ZIP : « version de développement »</td><td>page hors site publié</td><td>utiliser l'adresse https:// déployée</td></tr>
+  </table>
+  <div class="warn">Dans l'appli : <b>« Ça ne marche pas ? Lancer le diagnostic »</b> teste tout en direct (HTTPS, manifest, icônes, hors-ligne, installation).</div>
+</section>
+
+<section class="card">
+  <h2><span class="num">★</span>Mémo ultra-court</h2>
+  <pre class="memo">1. Appli → « Installer » → « Télécharger mes-accords-pwa.zip »
+2. Glisser le ZIP sur https://app.netlify.com/drop → noter https://…
+3. Téléphone → ouvrir l'adresse →
+   Android : ⋮ → « Installer l'application »
+   iPhone  : Safari → Partager → « Sur l'écran d'accueil »
+4. Lancer depuis l'ICÔNE → plein écran ✓
+5. Nouvelle icône ? Nouveau ZIP → Deploy manually → désinstaller → réinstaller
+6. Sauvegarde : bouton Export → garder clavier.csv</pre>
+</section>
+
+<footer>Mes accords — PWA accordéon diatonique · Guide d'installation · Imprime cette page ou enregistre-la en PDF (Ctrl/Cmd + P).</footer>
+
+</div>
+</body>
+</html>

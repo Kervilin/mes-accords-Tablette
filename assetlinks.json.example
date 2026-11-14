@@ -1,0 +1,11 @@
+{
+  "_comment": "Modèle pour une future TWA (APK Android). Remplace <EMPREINTE_SHA256> par la valeur donnée par PWABuilder / keytool, puis publie ce fichier à l'adresse https://ton-domaine/.well-known/assetlinks.json pour supprimer la barre d'adresse dans l'APK.",
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "fr.mesaccords.app",
+    "sha256_cert_fingerprints": [
+      "<EMPREINTE_SHA256_DE_LA_CLE_DE_SIGNATURE>"
+    ]
+  }
+}

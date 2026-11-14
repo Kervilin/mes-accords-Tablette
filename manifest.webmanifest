@@ -1,0 +1,53 @@
+{
+  "name": "Mes accords — accordéon diatonique",
+  "short_name": "Mes accords",
+  "description": "Visualiseur d'accords et éditeur de clavier pour accordéon diatonique : basses, poussé/tiré, fenêtre de jeu, import/export CSV et accordage au micro.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "fullscreen",
+  "display_override": [
+    "fullscreen",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#0f141b",
+  "theme_color": "#0f141b",
+  "categories": [
+    "music",
+    "utilities",
+    "education"
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Éditer mon clavier",
+      "short_name": "Éditer",
+      "description": "Ouvrir l'éditeur de clavier",
+      "url": "./?action=edit"
+    }
+  ]
+}
