@@ -1,0 +1,26 @@
+{
+	"appId": "fr.mesaccords.app",
+	"appName": "Mes accords",
+	"webDir": "dist",
+	"android": {
+		"allowMixedContent": false,
+		"backgroundColor": "#0f141b"
+	},
+	"server": {
+		"androidScheme": "https"
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 900,
+			"launchAutoHide": true,
+			"backgroundColor": "#0f141b",
+			"showSpinner": false,
+			"androidScaleType": "CENTER_INSIDE"
+		},
+		"StatusBar": {
+			"overlaysWebView": true,
+			"style": "DARK",
+			"backgroundColor": "#0f141b"
+		}
+	}
+}

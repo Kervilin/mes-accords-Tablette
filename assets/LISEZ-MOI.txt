@@ -1,0 +1,16 @@
+VOTRE ICÔNE D'APPLI ANDROID
+===========================
+
+Mettez votre image dans CE dossier, nommée :
+
+    mon-icone.png      (ou mon-icone.jpg / mon-icone.webp)
+
+Conseils :
+  - image carrée, idéalement 1024 × 1024 pixels (512 minimum) ;
+  - motif au centre, avec un peu de marge (Android découpe l'icône en rond) ;
+  - la couleur des coins de l'image sert de fond à l'icône et à l'écran de démarrage.
+
+Attention sous Windows : vérifiez que le nom n'est pas « mon-icone.png.png »
+(Explorateur → Affichage → cocher « Extensions de noms de fichiers »).
+
+Sans fichier mon-icone, l'APK garde l'icône « soufflet » par défaut.
