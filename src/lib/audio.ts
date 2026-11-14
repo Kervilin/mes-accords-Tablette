@@ -111,3 +111,59 @@ export function blip(freq = 880, dur = 0.08) {
   o.start(t0);
   o.stop(t0 + dur + 0.02);
 }
+
+/**
+ * Accord tenu : joué tant que `stopChord()` n'est pas appelé (appui long).
+ * Même timbre que `playChord`, sans extinction automatique.
+ */
+export function holdChord(midis: number[]): boolean {
+  const c = ctx();
+  if (!c) return false;
+  stopChord();
+  const uniq = [...new Set(midis.filter((m) => m > 20 && m < 110))];
+  if (!uniq.length) return false;
+
+  const t0 = c.currentTime + 0.02;
+  const master = c.createGain();
+  master.gain.setValueAtTime(0.0001, t0);
+  master.gain.exponentialRampToValueAtTime(0.24, t0 + 0.08);
+  master.gain.setTargetAtTime(0.19, t0 + 0.12, 0.35);
+
+  const comp = c.createDynamicsCompressor();
+  comp.threshold.value = -18;
+  comp.ratio.value = 5;
+  master.connect(comp);
+  comp.connect(c.destination);
+
+  const oscs: OscillatorNode[] = [];
+  uniq.forEach((m, i) => {
+    const f = 440 * Math.pow(2, (m - 69) / 12);
+    const delay = i * 0.016;
+    const g = c.createGain();
+    g.gain.value = 0.42 / (1 + i * 0.12);
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(Math.min(7000, f * 3.2), t0);
+    lp.frequency.linearRampToValueAtTime(Math.min(8000, f * 5), t0 + 0.2 + delay);
+    lp.Q.value = 0.8;
+    g.connect(lp);
+    lp.connect(master);
+    [-8, 8].forEach((det) => {
+      const o = c.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.setValueAtTime(f, t0);
+      o.detune.value = det;
+      const og = c.createGain();
+      og.gain.setValueAtTime(0.0001, t0);
+      og.gain.linearRampToValueAtTime(0.55, t0 + 0.05 + delay);
+      o.connect(og);
+      og.connect(g);
+      o.start(t0 + delay);
+      oscs.push(o);
+    });
+  });
+
+  // stopAt infini : tant que rien ne l'arrête, le son continue
+  live = { osc: oscs, gain: master, stopAt: Number.POSITIVE_INFINITY };
+  return true;
+}

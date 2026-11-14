@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import { allLeftGridSlots, allRightGridSlots, layout } from "@/lib/keyboard";
 import {
   dKey,
@@ -161,6 +161,7 @@ function Joystick({
   onDir,
   onMode,
   onRaz,
+  onMenu,
   isEdit = false,
 }: {
   width: number;
@@ -173,6 +174,8 @@ function Joystick({
   onDir: (d: 0 | 1) => void;
   onMode: (m: "maj" | "min") => void;
   onRaz: () => void;
+  /** appui long au centre : ouvre le menu des types d'accord */
+  onMenu?: () => void;
   isEdit?: boolean;
 }) {
   // Taille demandée : un bouton du clavier + 50 % (Dm × 1.5),
@@ -266,8 +269,12 @@ function Joystick({
     const c = centerOf();
     const vx = x - c.x;
     const vy = y - c.y;
-    if (Math.hypot(vx, vy) < knob * 0.17) return null; // centre : pas de clic long
+    if (Math.hypot(vx, vy) < knob * 0.17) return null; // centre
     return Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+  };
+  const isCenter = (x: number, y: number) => {
+    const c = centerOf();
+    return Math.hypot(x - c.x, y - c.y) < knob * 0.17;
   };
 
   /** action sur une étiquette : P / T immédiat, Majeur / mineur après l'appui long */
@@ -306,6 +313,16 @@ function Joystick({
         setActive(z);
         fireNow(z);
       }, LONG_MS);
+    } else if (onMenu && isCenter(e.clientX, e.clientY)) {
+      // centre : appui long → menu des types d'accord (le double-toucher reste le Raz)
+      longTimer.current = window.setTimeout(() => {
+        longTimer.current = null;
+        if (pid.current === -1) return;
+        longFired.current = true;
+        lastTap.current = 0;
+        buzz(18);
+        onMenu();
+      }, LONG_MS + 100);
     }
   };
 
@@ -420,7 +437,7 @@ function Joystick({
         className={cs("joy-btn", flash && "joy-flash")}
         role="button"
         tabIndex={0}
-        aria-label="Bouton de commande : gauche T (tiré), droite P (poussé), haut Majeur (appui long), bas mineur (appui long), double appui Raz"
+        aria-label="Bouton de commande : gauche T (tiré), droite P (poussé), haut Majeur (appui long), bas mineur (appui long), double appui Raz, appui long au centre : types d'accord"
         title={
           isEdit
             ? "Bouton de commande : glisse ← T (tiré) · → P (poussé) · double-toucher = Raz sens courant"
@@ -485,6 +502,100 @@ function Joystick({
 /* ============================================================
    Clavier
    ============================================================ */
+/* ============================================================
+   Carte de l'accord (le grand rond central)
+   - toucher court  → ouvre le réglage (types, sens, majeur/mineur, tierces)
+   - appui long     → joue l'accord tant que le doigt reste posé
+   ============================================================ */
+function ChordCard(p: {
+  style: CSSProperties;
+  interactive: boolean;
+  onOpen?: () => void;
+  onHoldStart?: () => void;
+  onHoldEnd?: () => void;
+  children: React.ReactNode;
+}) {
+  const timer = useRef<number | null>(null);
+  const down = useRef(false);
+  const held = useRef(false);
+  const [pressed, setPressed] = useState(false);
+  const clear = () => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+  const endHold = () => {
+    if (!held.current) return;
+    held.current = false;
+    p.onHoldEnd?.();
+  };
+  const onDown = (e: RPointerEvent<HTMLDivElement>) => {
+    if (!p.interactive || down.current) return;
+    e.preventDefault();
+    down.current = true;
+    held.current = false;
+    setPressed(true);
+    clear();
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      if (!down.current) return;
+      held.current = true;
+      buzz(8);
+      p.onHoldStart?.();
+    }, 350);
+  };
+  const onUp = () => {
+    if (!down.current) return;
+    down.current = false;
+    setPressed(false);
+    clear();
+    if (held.current) endHold();
+    else p.onOpen?.();
+  };
+  const onLeave = () => {
+    if (!down.current) return;
+    down.current = false;
+    setPressed(false);
+    clear();
+    endHold();
+  };
+  // le doigt ou la souris quitte la carte : on arrête le son
+  const onOut = (e: RPointerEvent<HTMLDivElement>) => {
+    const to = e.relatedTarget as Node | null;
+    if (to && e.currentTarget.contains(to)) return;
+    onLeave();
+  };
+  // passage en édition (carte inactive) : on repart de zéro
+  useEffect(() => {
+    if (!p.interactive) onLeave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.interactive]);
+  return (
+    <div
+      className={cs("chord-card", pressed && p.interactive && "chord-card-pressed")}
+      style={p.style}
+      role={p.interactive ? "button" : undefined}
+      tabIndex={p.interactive ? 0 : -1}
+      aria-label={p.interactive ? "Accord : toucher pour régler, appui long pour l'entendre" : undefined}
+      onPointerDown={onDown}
+      onPointerUp={onUp}
+      onPointerCancel={onLeave}
+      onPointerOut={onOut}
+      onPointerLeave={onLeave}
+      onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={(e) => {
+        if (p.interactive && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          p.onOpen?.();
+        }
+      }}
+    >
+      {p.children}
+    </div>
+  );
+}
+
 export type KeyboardViewProps = {
   kb: KB;
   width: number;
@@ -504,6 +615,11 @@ export type KeyboardViewProps = {
   onEditRight: (key: string) => void;
   onEditLeft: (key: string) => void;
   onRaz: () => void;
+  onMenu?: () => void;
+  /** carte de l'accord : toucher = réglage, appui long = son tenu */
+  onCardOpen?: () => void;
+  onCardHoldStart?: () => void;
+  onCardHoldEnd?: () => void;
 };
 
 export function KeyboardView(p: KeyboardViewProps) {
@@ -776,8 +892,11 @@ export function KeyboardView(p: KeyboardViewProps) {
     >
       {/* colonne gauche : composition de l'accord + basses + joystick */}
       <div className="col" style={V({ width: `${W0}px`, height: `${Hc}px` })}>
-        <div
-          className="chord-card"
+        <ChordCard
+          interactive={!edit}
+          onOpen={p.onCardOpen}
+          onHoldStart={p.onCardHoldStart}
+          onHoldEnd={p.onCardHoldEnd}
           style={V({
             left: `${Math.round((W0 - Cd) / 2)}px`,
             top: 0,
@@ -800,7 +919,7 @@ export function KeyboardView(p: KeyboardViewProps) {
                 ))
               : "Touche une note"}
           </span>
-        </div>
+        </ChordCard>
 
         <div
           className="hand"
@@ -820,6 +939,7 @@ export function KeyboardView(p: KeyboardViewProps) {
           onDir={p.onDir}
           onMode={p.onMode}
           onRaz={p.onRaz}
+          onMenu={p.onMenu}
           isEdit={!!edit}
         />
       </div>

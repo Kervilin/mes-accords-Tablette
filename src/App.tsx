@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bellows, KeyboardView } from "@/components/Accordion";
 import { Icon, Reveal, Toast } from "@/components/Chrome";
 import { DiagSheet, FullscreenHint, IconSheet, InstallSheet } from "@/components/Mobile";
-import { blip, playChord, stopChord } from "@/lib/audio";
+import { ChordMenu, HelpSheet } from "@/components/Help";
+import { ChordPicker } from "@/components/ChordPicker";
+import { blip, holdChord, playChord, stopChord } from "@/lib/audio";
 import { autoFullscreenOnFirstGesture, exitFullscreen, isStandaloneMode, loadFsAuto, saveFsAuto, useFullscreen } from "@/lib/fullscreen";
 import { registerSW, useInstall, usePwaStatus } from "@/lib/pwa";
 import { isNative, nativeFullscreen, onAndroidBack } from "@/lib/native";
@@ -88,6 +90,9 @@ export default function App() {
   const [toastTxt, setToastTxt] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [installOpen, setInstallOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [chordMenu, setChordMenu] = useState(false);
+  const [picker, setPicker] = useState(false);
   /* Textes d'aide / légendes : masqués par défaut, réaffichés avec le bouton T */
   /* taille du clavier : null = ajusté automatiquement à l'écran ; sinon choisie au pincement */
   const [kbZoom, setKbZoom] = useState<number | null>(() => {
@@ -466,6 +471,21 @@ export default function App() {
   /* ---------- actions clavier (musique) ---------- */
   const resetSel = () => setS((s) => ({ ...s, root: -1, dir: 1, low: null }));
 
+  /** Tierces (accords de gauche à 3 notes) : bascule, mémorisée */
+  const toggleTierces = () => {
+    const v = !S.tierces;
+    setS((s) => ({ ...s, tierces: v, low: null }));
+    saveTierces(v);
+    toast(v ? "Avec tierce : accords de gauche à 3 notes." : "Sans tierce : accords de gauche à 2 notes.");
+  };
+  /** appui long sur la carte : l'accord sonne tant que le doigt reste posé */
+  const cardHoldStart = () => {
+    if (vm.none || !vm.playMidis.length) return;
+    setPlaying(false);
+    holdChord(vm.playMidis);
+  };
+  const cardHoldEnd = () => stopChord();
+
   const setDir = (d: 0 | 1) => {
     setS((s) => ({ ...s, dir: d }));
     if (edit) {
@@ -755,6 +775,9 @@ export default function App() {
   /* ---------- bouton « retour » Android (appli native) ---------- */
   const backRef = useRef<() => boolean>(() => false);
   backRef.current = () => {
+    if (helpOpen) return setHelpOpen(false), true;
+    if (picker) return setPicker(false), true;
+    if (chordMenu) return setChordMenu(false), true;
     if (ask) return setAsk(null), true;
     if (diagOpen) return setDiagOpen(false), true;
     if (iconOpen) return setIconOpen(false), true;
@@ -791,7 +814,10 @@ export default function App() {
       const t = e.target as HTMLElement | null;
       const typing = !!t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
       if (e.key === "Escape") {
-        if (ask) setAsk(null);
+        if (helpOpen) setHelpOpen(false);
+        else if (picker) setPicker(false);
+        else if (chordMenu) setChordMenu(false);
+        else if (ask) setAsk(null);
         else if (edit) cancelEdit();
         else resetSel();
         return;
@@ -990,6 +1016,21 @@ export default function App() {
         </header>
       )}
 
+      {/* ======= bouton Mode d'emploi (affiché par le bouton i) ======= */}
+      {!edit && showTexts && (
+        <button
+          type="button"
+          className="ch mt-2.5 flex w-full items-center justify-center gap-2 text-[15px] font-bold"
+          style={{ background: "var(--c-card)", borderColor: "var(--c-sel)", color: "var(--c-tx)" }}
+          onClick={() => setHelpOpen(true)}
+        >
+          <span style={{ color: "var(--c-sel)" }} className="inline-flex">
+            <Icon n="info" className="h-[1.2em] w-[1.2em]" />
+          </span>
+          Mode d'emploi
+        </button>
+      )}
+
       {/* ======= console accord ======= */}
       {!edit && (
         <section className="panel rise mt-2.5 p-3 sm:p-4" style={{ animationDelay: "70ms" }}>
@@ -1170,6 +1211,12 @@ export default function App() {
                 resetSel();
               }
             }}
+            onMenu={edit ? undefined : () => setChordMenu(true)}
+            onCardOpen={() => {
+              if (!edit) setPicker(true);
+            }}
+            onCardHoldStart={cardHoldStart}
+            onCardHoldEnd={cardHoldEnd}
           />
         </div>
 
@@ -1561,6 +1608,29 @@ export default function App() {
           toast(`Icône « ${id === "dark" ? "Nuit" : id === "light" ? "Papier" : "Laiton"} » sélectionnée : télécharge les PNG ci-dessous.`);
         }}
       />
+
+      <ChordPicker
+        open={picker}
+        root={S.root}
+        enr={S.enr}
+        mode={S.mode}
+        isSym={isSym(S.enr)}
+        tierces={S.tierces}
+        onRoot={(root) => setS((st) => ({ ...st, root, low: null }))}
+        onEnr={(v) => setS((st) => ({ ...st, enr: v, low: null, more: false }))}
+        onMode={(m) => {
+          if (!isSym(S.enr)) setS((st) => ({ ...st, mode: m, low: null }));
+        }}
+        onTierces={toggleTierces}
+        onClose={() => setPicker(false)}
+      />
+      <ChordMenu
+        open={chordMenu}
+        enr={S.enr}
+        onPick={(v) => setS((st) => ({ ...st, enr: v, low: null, more: false }))}
+        onClose={() => setChordMenu(false)}
+      />
+      <HelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <InstallSheet
         open={installOpen}
