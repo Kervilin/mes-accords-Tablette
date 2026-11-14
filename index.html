@@ -40,47 +40,53 @@
     -->
     <script>
       (function () {
+        // Vérification de compatibilité et de démarrage de l'appli.
+        // Ce script n'utilise que du JavaScript ancien : il fonctionne même
+        // sur les navigateurs qui ne savent pas afficher l'application.
         var ok = false;
         try {
           ok = !!(window.CSS && CSS.supports && CSS.supports("color", "color-mix(in srgb, red, blue)"));
         } catch (e) {}
-        if (ok) return;
-        var m = /Chrome\/(\d+)/.exec(navigator.userAgent || "");
-        var ver = m ? m[1] : "inconnue";
-        var android = /Android\s([\d.]+)/.exec(navigator.userAgent || "");
-        var ios = /iPhone|iPad|iPod/.test(navigator.userAgent || "");
-        var root = document.getElementById("root");
-        if (root) root.style.display = "none";
-        var box = document.createElement("div");
-        box.setAttribute("style",
-          "font-family:sans-serif;background:#0f141b;color:#eef3f9;min-height:100vh;" +
-          "padding:28px 22px;line-height:1.5;font-size:17px;box-sizing:border-box");
-        box.innerHTML =
-          "<h1 style='font-size:24px;margin:0 0 14px'>Mise à jour nécessaire</h1>" +
-          "<p>Le moteur d'affichage de cet appareil est trop ancien pour « Mes accords »" +
-          " (version actuelle : <b>" + ver + "</b>, il faut <b>111 ou plus</b>" +
-          (android ? ", Android " + android[1] : "") + ").</p>" +
-          "<p style='margin-top:16px'><b>Pour corriger :</b></p>" +
-          (ios
-            ? "<ol style='padding-left:22px'>" +
-              "<li>Ouvrez <b>Réglages → Général → Mise à jour logicielle</b>.</li>" +
-              "<li>Installez la mise à jour proposée (iOS 16.4 ou plus nécessaire).</li>" +
-              "<li>Rouvrez « Mes accords ».</li></ol>"
-            : "<ol style='padding-left:22px'>" +
-              "<li>Ouvrez le <b>Play Store</b>.</li>" +
-              "<li>Cherchez <b>Google Chrome</b> et touchez <b>Mettre à jour</b>.</li>" +
-              "<li>Cherchez aussi <b>Android System WebView</b> et mettez-le à jour s'il est proposé.</li>" +
-              "<li>Fermez puis rouvrez « Mes accords ».</li>" +
-              "</ol>" +
-              "<p style='color:#93a1b4;font-size:15px'>Sur Android 7, Chrome peut monter jusqu'à la version 119 : c'est suffisant.</p>") +
-          "<button id='ma-force' style='margin-top:18px;padding:12px 18px;font-size:16px;" +
-          "border-radius:10px;border:1px solid #2c3949;background:#1a222d;color:#eef3f9'>" +
-          "Ouvrir quand même</button>";
-        document.body.appendChild(box);
-        document.getElementById("ma-force").onclick = function () {
-          box.parentNode.removeChild(box);
-          if (root) root.style.display = "";
+        var card = function (title, html) {
+          var root = document.getElementById("root");
+          if (root) root.style.display = "none";
+          var box = document.createElement("div");
+          box.setAttribute("style",
+            "font-family:sans-serif;background:#0f141b;color:#eef3f9;min-height:100vh;" +
+            "padding:28px 22px;line-height:1.5;font-size:17px;box-sizing:border-box");
+          box.innerHTML = "<h1 style='font-size:24px;margin:0 0 14px'>" + title + "</h1>" + html;
+          document.body.appendChild(box);
+          return box;
         };
+        var openAnyway = function (box) {
+          var button = document.createElement("button");
+          button.style.cssText = "margin-top:18px;padding:12px 18px;font-size:16px;" +
+            "border-radius:10px;border:1px solid #2c3949;background:#1a222d;color:#eef3f9";
+          button.textContent = "Ouvrir quand même";
+          button.onclick = function () {
+            document.body.removeChild(box);
+            var root = document.getElementById("root");
+            if (root) root.style.display = "";
+          };
+          box.appendChild(button);
+        };
+        if (!ok) {
+          var box = card("Mise à jour nécessaire",
+            "<p>Le moteur d'affichage de cet appareil est trop ancien pour « Mes accords ».</p>" +
+            "<p style='margin-top:10px'>Version de Chrome / WebView : <b>" +
+            (/Chrome\/(\d+)/.exec(navigator.userAgent || "") || ["", "inconnue"])[1] +
+            "</b> — il faut la version <b>111</b> ou plus récente.</p>" +
+            "<p style='margin-top:16px'><b>Pour corriger :</b></p>" +
+            "<ol style='padding-left:22px'>" +
+            "<li>Ouvrez le <b>Play Store</b>.</li>" +
+            "<li>Cherchez <b>Google Chrome</b> et touchez <b>Mettre à jour</b>.</li>" +
+            "<li>Cherchez aussi <b>Android System WebView</b> et mettez-le à jour s'il est proposé.</li>" +
+            "<li>Fermez puis rouvrez « Mes accords ».</li>" +
+            "</ol>" +
+            "<p style='color:#93a1b4;font-size:15px'>Sur Android 7, Chrome peut monter jusqu'à la version 119 : c'est suffisant.</p>");
+          openAnyway(box);
+          return;
+        }
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

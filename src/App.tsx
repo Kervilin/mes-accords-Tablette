@@ -230,8 +230,11 @@ export default function App() {
     if (edit || S.root < 0) return;
     setManual((current) => {
       const right = new Set(current?.right ?? automatic.selected);
-      const left = new Set(current?.left ?? automatic.leftPick);
-      const touchedLeft = new Set(current?.touchedLeft ?? automatic.leftPick);
+      // Long-pressing a left-hand key means that the player takes over the
+      // left hand: the first press clears ALL automatic bass and chord
+      // suggestions, so none of them stays lit after the manual choice.
+      const left = new Set(current?.left);
+      const touchedLeft = new Set<number>();
       if (left.has(ix)) left.delete(ix);
       else left.add(ix);
       touchedLeft.add(ix);
@@ -1083,19 +1086,27 @@ export default function App() {
         </header>
       )}
 
-      {/* ======= bouton Mode d'emploi (affiché par le bouton i) ======= */}
+      {/* ======= signature + bouton Mode d'emploi (affichés par le bouton i) ======= */}
       {!edit && showTexts && (
-        <button
-          type="button"
-          className="ch mt-2.5 flex w-full items-center justify-center gap-2 text-[15px] font-bold"
-          style={{ background: "var(--c-card)", borderColor: "var(--c-sel)", color: "var(--c-tx)" }}
-          onClick={() => setHelpOpen(true)}
-        >
-          <span style={{ color: "var(--c-sel)" }} className="inline-flex">
-            <Icon n="info" className="h-[1.2em] w-[1.2em]" />
-          </span>
-          Mode d'emploi
-        </button>
+        <>
+          <p
+            className="mt-2.5 text-center text-[11.5px] leading-snug"
+            style={{ color: "var(--c-mu)" }}
+          >
+            Appli développée par Denis <span aria-hidden="true">·</span> 11/2026
+          </p>
+          <button
+            type="button"
+            className="ch mt-1.5 flex w-full items-center justify-center gap-2 text-[15px] font-bold"
+            style={{ background: "var(--c-card)", borderColor: "var(--c-sel)", color: "var(--c-tx)" }}
+            onClick={() => setHelpOpen(true)}
+          >
+            <span style={{ color: "var(--c-sel)" }} className="inline-flex">
+              <Icon n="info" className="h-[1.2em] w-[1.2em]" />
+            </span>
+            Mode d'emploi
+          </button>
+        </>
       )}
 
       {/* ======= console accord ======= */}

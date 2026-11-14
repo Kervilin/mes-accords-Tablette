@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="paper" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" seed="7" result="noise"/>
+      <feColorMatrix in="noise" type="saturate" values="0" result="grey"/>
+      <feComponentTransfer in="grey" result="grain">
+        <feFuncA type="linear" slope="0.16"/>
+      </feComponentTransfer>
+      <feBlend in="SourceGraphic" in2="grain" mode="multiply"/>
+    </filter>
+    <filter id="crayon" x="-8%" y="-8%" width="116%" height="116%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.32 0.62" numOctaves="4" seed="31" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="12" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="4" result="micro"/>
+      <feColorMatrix in="micro" type="saturate" values="0" result="microg"/>
+      <feComponentTransfer in="microg" result="mask">
+        <feFuncA type="table" tableValues="0.68 1"/>
+      </feComponentTransfer>
+      <feComposite in="d" in2="mask" operator="in" result="textured"/>
+      <feMerge><feMergeNode in="d"/><feMergeNode in="textured"/></feMerge>
+    </filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="0.6"/></filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#eeeae0"/>
+  <rect width="1024" height="1024" fill="#f3efe6" filter="url(#paper)"/>
+
+  <g filter="url(#crayon)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- bleu : souffle central et grandes arches -->
+    <path d="M509 726 C498 600 492 455 499 253" stroke="#2f6fb0" stroke-width="21" opacity="0.8"/>
+    <path d="M518 724 C512 590 520 420 534 165" stroke="#3c7cbb" stroke-width="14" opacity="0.75"/>
+    <path d="M492 728 C477 611 466 493 470 371" stroke="#2c6aa9" stroke-width="16" opacity="0.9"/>
+    <path d="M532 724 C575 561 639 361 731 215" stroke="#2f74b5" stroke-width="20" opacity="0.8"/>
+    <path d="M545 727 C622 542 746 356 886 205" stroke="#3d7fbe" stroke-width="17" opacity="0.78"/>
+    <path d="M551 728 C664 575 815 397 947 187" stroke="#2e6fae" stroke-width="12" opacity="0.88"/>
+    <path d="M546 729 C638 607 773 458 914 401" stroke="#4a88c5" stroke-width="11" opacity="0.8"/>
+
+    <!-- rouge -->
+    <path d="M598 723 C612 590 643 393 716 247" stroke="#d92b2b" stroke-width="25" opacity="0.95"/>
+    <path d="M619 721 C651 570 707 393 784 269" stroke="#e33430" stroke-width="19" opacity="0.9"/>
+    <path d="M640 716 C689 561 762 423 856 321" stroke="#d12727" stroke-width="19" opacity="0.9"/>
+    <path d="M384 724 C386 618 406 508 449 420" stroke="#d32b2b" stroke-width="13" opacity="0.88"/>
+    <path d="M330 719 C341 587 372 489 408 402" stroke="#dd3730" stroke-width="12" opacity="0.85"/>
+
+    <!-- jaune -->
+    <path d="M563 726 C576 597 603 470 650 367" stroke="#ecc72d" stroke-width="21" opacity="0.95"/>
+    <path d="M589 727 C612 604 651 476 700 394" stroke="#f0cf3a" stroke-width="16" opacity="0.9"/>
+    <path d="M464 729 C467 620 481 505 512 416" stroke="#e6c22b" stroke-width="13" opacity="0.88"/>
+    <path d="M438 726 C445 627 478 517 545 437" stroke="#efcc34" stroke-width="10" opacity="0.8"/>
+
+    <!-- bleu/violet à gauche -->
+    <path d="M370 722 C338 652 302 563 277 489" stroke="#3a3f9d" stroke-width="19" opacity="0.9"/>
+    <path d="M397 727 C362 641 330 560 302 508" stroke="#4b50ad" stroke-width="12" opacity="0.82"/>
+    <path d="M340 728 C283 638 229 517 211 437" stroke="#3b74b4" stroke-width="11" opacity="0.85"/>
+    <path d="M349 731 C298 659 259 585 238 548" stroke="#3470ac" stroke-width="9" opacity="0.75"/>
+
+    <!-- bleu/violet à droite -->
+    <path d="M683 722 C698 652 718 564 741 493" stroke="#353d9c" stroke-width="20" opacity="0.9"/>
+    <path d="M667 728 C696 645 741 546 802 481" stroke="#3c6eb2" stroke-width="12" opacity="0.8"/>
+    <path d="M706 726 C728 648 763 580 819 521" stroke="#464da5" stroke-width="17" opacity="0.85"/>
+    <path d="M730 728 C754 647 791 572 803 548" stroke="#2f6aa8" stroke-width="13" opacity="0.8"/>
+  </g>
+
+  <g filter="url(#crayon)">
+    <!-- éclats colorés autour -->
+    <circle cx="90" cy="420" r="11" fill="#e5b52a"/>
+    <circle cx="126" cy="378" r="7" fill="#d4372f"/>
+    <circle cx="64" cy="500" r="8" fill="#e2b12e"/>
+    <circle cx="50" cy="552" r="10" fill="#cf2f28"/>
+    <circle cx="100" cy="514" r="8" fill="#2f6cab"/>
+    <circle cx="78" cy="618" r="9" fill="#d23a2e"/>
+    <circle cx="126" cy="653" r="7" fill="#e7bc2f"/>
+    <circle cx="46" cy="586" r="7" fill="#2f6cab"/>
+    <circle cx="62" cy="468" r="6" fill="#d53a30"/>
+    <circle cx="60" cy="448" r="6" fill="#2f76b6"/>
+    <circle cx="146" cy="545" r="7" fill="#e5b52a"/>
+    <circle cx="132" cy="493" r="6" fill="#d6352c"/>
+    <circle cx="978" cy="520" r="12" fill="#e6b62c"/>
+    <circle cx="940" cy="470" r="8" fill="#d3342c"/>
+    <circle cx="950" cy="558" r="7" fill="#2f6cab"/>
+    <circle cx="965" cy="612" r="9" fill="#d2352d"/>
+    <circle cx="925" cy="580" r="7" fill="#e6b92e"/>
+    <circle cx="912" cy="670" r="8" fill="#d4352d"/>
+    <circle cx="958" cy="670" r="6" fill="#2e6aaa"/>
+    <circle cx="952" cy="458" r="7" fill="#e7bb2d"/>
+    <circle cx="912" cy="430" r="7" fill="#2f74b4"/>
+    <circle cx="936" cy="438" r="5" fill="#d7342b"/>
+  </g>
+</svg>
