@@ -91,6 +91,7 @@ export default function App() {
   const [toastTxt, setToastTxt] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [installOpen, setInstallOpen] = useState(false);
+    const [bellowsPos, setBellowsPos] = useState<"top" | "bottom">("top");
   const [helpOpen, setHelpOpen] = useState(false);
   const [chordMenu, setChordMenu] = useState(false);
   const [picker, setPicker] = useState(false);
@@ -207,6 +208,77 @@ export default function App() {
   }, []);
 
   const automatic = useMemo(() => buildView(kb, S), [kb, S]);
+    /* ---------- export JSON ---------- */
+  const exportKB = () => {
+    if (!kb) {
+      toast("Aucun clavier à exporter.");
+      return;
+    }
+    const data = {
+      name: cur ?? "Mon clavier",
+      exportedAt: new Date().toISOString(),
+      keyboard: kb
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(cur ?? "clavier").replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(`Clavier « ${cur ?? "Mon clavier"} » exporté en JSON.`);
+  };
+
+  /* ---------- import JSON ---------- */
+  /* ---------- import JSON ---------- */
+  const importKB = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    
+    input.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data.keyboard || !data.keyboard.b || !data.keyboard.l) {
+          toast("Fichier JSON invalide : structure incorrecte.");
+          return;
+        }
+        const name = data.name || file.name.replace(/\.json$/i, '');
+        
+        // 1. Écrire le clavier dans localStorage
+        const nl = writeKB(name, toCSV(data.keyboard), list);
+        
+        // 2. Mettre à jour la liste
+        setList(nl);
+        
+        // 3. Charger le clavier
+        setKb(data.keyboard);
+        setCur(name);
+        try {
+          localStorage.setItem("mac_kb_name", name);
+        } catch {}
+        resetSel();
+        
+        toast(`Clavier « ${name} » importé avec succès.`);
+      } catch (err) {
+        toast("Erreur lors de l'import : fichier JSON invalide.");
+        console.error(err);
+      } finally {
+        document.body.removeChild(input);
+      }
+    });
+    
+    input.click();
+  };
   const vm = useMemo(
     () => manual ? buildManualView(kb, S, manual.right, manual.left, manual.touchedLeft) : automatic,
     [kb, S, automatic, manual],
@@ -985,7 +1057,32 @@ export default function App() {
       ) : (
         /* ======= en-tête ======= */
         <header className="panel rise overflow-hidden">
-          <Bellows open={S.dir ? 78 : 30} playing={playing} flush />
+              {bellowsPos === "top" && (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="flex-1"
+                  onClick={() => setDir(S.dir ? 0 : 1)}
+                  title={S.dir ? "Cliquez pour passer en Poussé" : "Cliquez pour passer en Tiré"}
+                  style={{ cursor: "pointer" }}
+                  role="button"
+                  aria-label="Basculer entre Poussé et Tiré"
+                >
+                  <Bellows open={S.dir ? 78 : 30} playing={playing} flush />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBellowsPos("bottom")}
+                  title="Déplacer l'accordéon en bas"
+                  aria-label="Déplacer l'accordéon en bas"
+                  className="ch grid h-9 w-9 min-h-[38px] shrink-0 place-items-center p-0 transition-transform hover:rotate-180"
+                  style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l-4-4M17 20l4-4" />
+                  </svg>
+                </button>
+              </div>
+              )}
           <div className="flex flex-wrap items-end gap-2 p-2.5 sm:p-3">
             <div
               className="flex w-full flex-1 flex-wrap items-center gap-1.5 rounded-2xl border p-1.5"
@@ -1025,6 +1122,18 @@ export default function App() {
                 onClick={startEdit}
               >
                 <Icon n="tune" />
+              </button>
+              <button
+                type="button"
+                title="Gérer le clavier (Enregistrer / Exporter / Importer / Supprimer)"
+                aria-label="Gérer le clavier"
+                className="ch grid h-9 w-9 min-h-[38px] place-items-center p-0"
+                onClick={() => setAsk({ kind: "manage", value: "" })}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+                </svg>
               </button>
               <button
                 type="button"
@@ -1603,51 +1712,105 @@ export default function App() {
                   ? "Enregistrer sous…"
                   : ask.kind === "newkb"
                     ? "Nouveau clavier"
-                    : "Supprimer le clavier"}
+                    : ask.kind === "manage"
+                      ? "Gérer le clavier"
+                      : "Supprimer le clavier"}
             </h2>
-            <p className="mt-1 text-[13.5px]" style={{ color: "var(--c-mu)" }}>
-              {ask.kind === "delete"
-                ? `« ${cur} » sera effacé de ce navigateur. Cette action est définitive.`
-                : ask.kind === "saveedit"
-                  ? `Choisis le nom du clavier (${comp.done}/${comp.total} notes renseignées).`
-                  : ask.kind === "newkb"
-                    ? "Un clavier d'usine sera créé sous ce nom."
-                    : "Une copie du clavier actuel sera enregistrée sous ce nom."}
-            </p>
-            {ask.kind !== "delete" && (
-              <input
-                autoFocus
-                value={ask.value}
-                onChange={(e) => setAsk({ ...ask, value: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmAsk();
-                }}
-                placeholder="Nom du clavier"
-                className="mt-3 min-h-[46px] w-full rounded-xl border px-3 text-[16px] font-semibold outline-none"
-                style={{ borderColor: "var(--c-bd)", background: "var(--c-bg2)", color: "var(--c-tx)" }}
-              />
+
+            {ask.kind === "manage" ? (
+              <>
+                <p className="mt-1 text-[13.5px]" style={{ color: "var(--c-mu)" }}>
+                  Que souhaitez-vous faire avec le clavier « {cur ?? "Mon clavier"} » ?
+                </p>
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                    onClick={() => setAsk({ kind: "saveas", value: cur ?? "Mon clavier" })}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="save" /> Enregistrer sous…
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                    onClick={() => { setAsk(null); exportKB(); }}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="export" /> Exporter (télécharger en JSON)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                    onClick={() => { setAsk(null); importKB(); }}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="export" /> Importer (depuis un fichier JSON)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-sel)", borderColor: "var(--c-sel)", color: "var(--c-selt)" }}
+                    onClick={() => setAsk({ kind: "delete", value: "" })}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="trash" /> Supprimer ce clavier
+                    </span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-[13.5px]" style={{ color: "var(--c-mu)" }}>
+                  {ask.kind === "delete"
+                    ? `⚠️ Êtes-vous sûr de vouloir supprimer « ${cur} » ? Cette action est irréversible. Le clavier sera définitivement effacé de ce navigateur.`
+                    : ask.kind === "saveedit"
+                      ? `Choisis le nom du clavier (${comp.done}/${comp.total} notes renseignées).`
+                      : ask.kind === "newkb"
+                        ? "Un clavier d'usine sera créé sous ce nom."
+                        : "Une copie du clavier actuel sera enregistrée sous ce nom."}
+                </p>
+                {ask.kind !== "delete" && (
+                  <input
+                    autoFocus
+                    value={ask.value}
+                    onChange={(e) => setAsk({ ...ask, value: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") confirmAsk();
+                    }}
+                    placeholder="Nom du clavier"
+                    className="mt-3 min-h-[46px] w-full rounded-xl border px-3 text-[16px] font-semibold outline-none"
+                    style={{ borderColor: "var(--c-bd)", background: "var(--c-bg2)", color: "var(--c-tx)" }}
+                  />
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button type="button" className="ch flex-1" onClick={() => setAsk(null)}>
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className="ch flex-1"
+                    style={{
+                      background: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
+                      borderColor: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
+                      color: ask.kind === "delete" ? "var(--c-selt)" : "var(--c-bg)",
+                    }}
+                    onClick={confirmAsk}
+                  >
+                    {ask.kind === "delete" ? "Supprimer" : "Enregistrer"}
+                  </button>
+                </div>
+              </>
             )}
-            <div className="mt-3 flex gap-2">
-              <button type="button" className="ch flex-1" onClick={() => setAsk(null)}>
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="ch flex-1"
-                style={{
-                  background: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
-                  borderColor: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
-                  color: ask.kind === "delete" ? "var(--c-selt)" : "var(--c-bg)",
-                }}
-                onClick={confirmAsk}
-              >
-                {ask.kind === "delete" ? "Supprimer" : "Enregistrer"}
-              </button>
-            </div>
           </div>
         </div>
       )}
-
       <FullscreenHint
         open={fsHint}
         onClose={() => setFsHint(false)}
@@ -1746,6 +1909,34 @@ export default function App() {
           }
         }}
       />
+            {bellowsPos === "bottom" && (
+        <div className="panel rise mt-2.5 p-2.5 sm:p-3">
+          <div className="flex items-center gap-1.5">
+            <div
+              className="flex-1"
+              onClick={() => setDir(S.dir ? 0 : 1)}
+              title={S.dir ? "Cliquez pour passer en Poussé" : "Cliquez pour passer en Tiré"}
+              style={{ cursor: "pointer" }}
+              role="button"
+              aria-label="Basculer entre Poussé et Tiré"
+            >
+              <Bellows open={S.dir ? 78 : 30} playing={playing} flush />
+            </div>
+            <button
+              type="button"
+              onClick={() => setBellowsPos("top")}
+              title="Remonter l'accordéon en haut"
+              aria-label="Remonter l'accordéon en haut"
+              className="ch grid h-9 w-9 min-h-[38px] shrink-0 place-items-center p-0 transition-transform hover:rotate-180"
+              style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 8v12M7 20l-4-4M7 20l4-4M17 16V4M17 4l-4 4M17 4l4 4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       <Toast text={toastTxt} />
     </div>
