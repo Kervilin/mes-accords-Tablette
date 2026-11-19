@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from "react";
 import { allLeftGridSlots, allRightGridSlots, layout } from "@/lib/keyboard";
 import {
   dKey,
@@ -16,6 +16,8 @@ const V = (o: Record<string, string | number>) => o as CSSProperties;
 /* ============================================================
    Soufflet : s'ouvre en tiré, se referme en poussé
    ============================================================ */
+
+
 export function Bellows({
   open,
   playing,
@@ -27,8 +29,41 @@ export function Bellows({
   flush?: boolean;
   className?: string;
 }) {
-  const o = Math.max(24, Math.min(80, open));
+  // ═══════════════════════════════════════════════════════════════
+  // ⚙️ VARIABLES D'AJUSTEMENT (modifiez ces 4 valeurs)
+  // ═══════════════════════════════════════════════════════════════
+  const OUV = 76    // % d'ouverture (0-100)
+  const MD = 20;    // % de marge fixe (0-100)
+  const So: 'G' | 'D' = 'G';  // Sens : 'G' = vers Gauche, 'D' = vers Droite
+  const Fi: 'D' | 'G' = 'D';  // Fixation : 'D' = à Droite, 'G' = à Gauche
+  // ═══════════════════════════════════════════════════════════════
+
   const folds = Array.from({ length: 26 });
+  const factor = Math.max(0, Math.min(1, (open - 24) / 56));
+
+  console.log("🪗 Bellows : OUV=", OUV, "MD=", MD, "So=", So, "Fi=", Fi, "factor=", factor.toFixed(2));
+
+  let leftPos: string;
+  let rightPos: string;
+
+  if (Fi === 'D' && So === 'G') {
+    const leftFerme = 100 - MD;
+    const leftOuvert = 100 - MD - OUV;
+    leftPos = `calc(${leftFerme}% - ${(leftFerme - leftOuvert)}% * ${factor.toFixed(4)})`;
+    rightPos = '0';
+  } else if (Fi === 'G' && So === 'D') {
+    const rightFerme = 100 - MD;
+    const rightOuvert = 100 - MD - OUV;
+    rightPos = `calc(${rightFerme}% - ${(rightFerme - rightOuvert)}% * ${factor.toFixed(4)})`;
+    leftPos = '0';
+  } else if (Fi === 'D' && So === 'D') {
+    leftPos = `${100 - MD}%`;
+    rightPos = `calc(${OUV}% * ${(1 - factor).toFixed(4)})`;
+  } else {
+    rightPos = `${100 - MD}%`;
+    leftPos = `calc(${OUV}% * ${(1 - factor).toFixed(4)})`;
+  }
+
   return (
     <div
       aria-hidden="true"
@@ -41,83 +76,60 @@ export function Bellows({
           : null),
       }}
     >
-      {/* plis */}
       <div
-        className="absolute inset-y-[6px] flex items-stretch overflow-hidden"
+        className="absolute inset-y-[3px]"
         style={{
-          left: 26,
-          width: `calc(${o}% - 46px)`,
-          transition: "width .85s cubic-bezier(.34,.86,.24,1)",
+          left: leftPos,
+          right: rightPos,
+          transition:
+            "left .85s cubic-bezier(.34,.86,.24,1), right .85s cubic-bezier(.34,.86,.24,1)",
         }}
       >
-        {folds.map((_, i) => (
-          <div
-            key={i}
-            className="h-full min-w-0 flex-1"
-            style={{
-              clipPath:
-                i % 2
-                  ? "polygon(0 9%, 100% 0, 100% 91%, 0 100%)"
-                  : "polygon(0 0, 100% 9%, 100% 100%, 0 91%)",
-              background:
-                i % 2
+        <div
+          className="absolute inset-y-0 left-0 w-8 rounded-[7px] border border-black/40"
+          style={{
+            background: "linear-gradient(180deg,#a8b2c0,#5a6472 42%,#2c333e)",
+            boxShadow: "0 6px 14px -6px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.4)",
+          }}
+        >
+          {[0.22, 0.5, 0.78].map((t) => (
+            <span key={t} className="absolute left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,.5)]" style={{ top: `${t * 100}%` }} />
+          ))}
+        </div>
+        <div
+          className="absolute inset-y-0 right-0 w-8 rounded-[7px] border border-black/40"
+          style={{
+            background: "linear-gradient(180deg,#a8b2c0,#5a6472 42%,#2c333e)",
+            boxShadow: "0 6px 14px -6px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.4)",
+          }}
+        >
+          {[0.22, 0.5, 0.78].map((t) => (
+            <span key={t} className="absolute left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,.5)]" style={{ top: `${t * 100}%` }} />
+          ))}
+        </div>
+        <div className="absolute inset-y-[3px] left-8 right-8 flex items-stretch overflow-hidden">
+          {folds.map((_, i) => (
+            <div
+              key={i}
+              className="h-full min-w-0 flex-1"
+              style={{
+                clipPath: i % 2 ? "polygon(0 9%, 100% 0, 100% 91%, 0 100%)" : "polygon(0 0, 100% 9%, 100% 100%, 0 91%)",
+                background: i % 2
                   ? "linear-gradient(90deg, rgba(0,0,0,.55), color-mix(in oklab, var(--c-sel) 78%, #1a070c) 48%, rgba(0,0,0,.6))"
                   : "linear-gradient(90deg, rgba(0,0,0,.3), color-mix(in oklab, var(--c-sel) 34%, #2b0e14) 52%, rgba(0,0,0,.42))",
-            }}
-          />
-        ))}
+              }}
+            />
+          ))}
+        </div>
       </div>
-
-      {/* plateau coulissant (droit) */}
-      <div
-        className="absolute inset-y-[3px] w-8 rounded-[7px] border border-black/40"
-        style={{
-          left: `calc(${o}% - 20px)`,
-          transition: "left .85s cubic-bezier(.34,.86,.24,1)",
-          background: "linear-gradient(180deg,#a8b2c0,#5a6472 42%,#2c333e)",
-          boxShadow: "0 6px 14px -6px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.4)",
-        }}
-      >
-        {[0.22, 0.5, 0.78].map((t) => (
-          <span
-            key={t}
-            className="absolute left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,.5)]"
-            style={{ top: `${t * 100}%` }}
-          />
-        ))}
-      </div>
-
-      {/* plateau fixe (gauche) */}
-      <div
-        className="absolute inset-y-[3px] left-[4px] w-8 rounded-[7px] border border-black/40"
-        style={{
-          background: "linear-gradient(180deg,#a8b2c0,#5a6472 42%,#2c333e)",
-          boxShadow: "0 6px 14px -6px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.4)",
-        }}
-      >
-        {[0.22, 0.5, 0.78].map((t) => (
-          <span
-            key={t}
-            className="absolute left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,.5)]"
-            style={{ top: `${t * 100}%` }}
-          />
-        ))}
-      </div>
-
       {playing && (
-        <div
-          className="breathe pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(60% 130% at 50% 50%, color-mix(in oklab, var(--c-yel) 40%, transparent), transparent 70%)",
-          }}
-        />
+        <div className="breathe pointer-events-none absolute inset-0" style={{ background: "radial-gradient(60% 130% at 50% 50%, color-mix(in oklab, var(--c-yel) 40%, transparent), transparent 70%)" }} />
       )}
     </div>
   );
 }
 
-/* ============================================================
+   /* ============================================================
    Joystick tactile (sous le clavier gauche, remplace Raz)
    ← tiré · → poussé · ↑ majeur · ↓ mineur · double-toucher = Raz
    ============================================================ */
@@ -161,6 +173,7 @@ function Joystick({
   onDir,
   onMode,
   onRaz,
+  onMenu,
   isEdit = false,
 }: {
   width: number;
@@ -173,6 +186,8 @@ function Joystick({
   onDir: (d: 0 | 1) => void;
   onMode: (m: "maj" | "min") => void;
   onRaz: () => void;
+  /** appui long au centre : ouvre le menu des types d'accord */
+  onMenu?: () => void;
   isEdit?: boolean;
 }) {
   // Taille demandée : un bouton du clavier + 50 % (Dm × 1.5),
@@ -266,8 +281,12 @@ function Joystick({
     const c = centerOf();
     const vx = x - c.x;
     const vy = y - c.y;
-    if (Math.hypot(vx, vy) < knob * 0.17) return null; // centre : pas de clic long
+    if (Math.hypot(vx, vy) < knob * 0.17) return null; // centre
     return Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+  };
+  const isCenter = (x: number, y: number) => {
+    const c = centerOf();
+    return Math.hypot(x - c.x, y - c.y) < knob * 0.17;
   };
 
   /** action sur une étiquette : P / T immédiat, Majeur / mineur après l'appui long */
@@ -306,6 +325,16 @@ function Joystick({
         setActive(z);
         fireNow(z);
       }, LONG_MS);
+    } else if (onMenu && isCenter(e.clientX, e.clientY)) {
+      // centre : appui long → menu des types d'accord (le double-toucher reste le Raz)
+      longTimer.current = window.setTimeout(() => {
+        longTimer.current = null;
+        if (pid.current === -1) return;
+        longFired.current = true;
+        lastTap.current = 0;
+        buzz(18);
+        onMenu();
+      }, LONG_MS + 100);
     }
   };
 
@@ -420,7 +449,7 @@ function Joystick({
         className={cs("joy-btn", flash && "joy-flash")}
         role="button"
         tabIndex={0}
-        aria-label="Bouton de commande : gauche T (tiré), droite P (poussé), haut Majeur (appui long), bas mineur (appui long), double appui Raz"
+        aria-label="Bouton de commande : gauche T (tiré), droite P (poussé), haut Majeur (appui long), bas mineur (appui long), double appui Raz, appui long au centre : types d'accord"
         title={
           isEdit
             ? "Bouton de commande : glisse ← T (tiré) · → P (poussé) · double-toucher = Raz sens courant"
@@ -485,6 +514,248 @@ function Joystick({
 /* ============================================================
    Clavier
    ============================================================ */
+/* ============================================================
+   Carte de l'accord (le grand rond central)
+   - toucher court  → ouvre le réglage (fondamentale, mode, majeur/mineur, tierces)
+   - appui long     → joue l'accord tant que le doigt reste posé
+   ============================================================ */
+function ChordCard(p: {
+  style: CSSProperties;
+  interactive: boolean;
+  onOpen?: () => void;
+  onPressStart?: () => void;
+  onHoldStart?: () => void;
+  onHoldEnd?: () => void;
+  children: React.ReactNode;
+}) {
+  const callbacks = useRef(p);
+  callbacks.current = p;
+  const timer = useRef<number | null>(null);
+  const tapTimer = useRef<number | null>(null);
+  const down = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    bounds: DOMRect;
+    target: HTMLButtonElement;
+  } | null>(null);
+  const held = useRef(false);
+  const skipClick = useRef(false);
+  const [visual, setVisual] = useState<"idle" | "pressed" | "holding">("idle");
+
+  const clearTimer = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  const clearTap = () => {
+    if (tapTimer.current !== null) window.clearTimeout(tapTimer.current);
+    tapTimer.current = null;
+  };
+  const finish = (updateVisual = true) => {
+    const press = down.current;
+    down.current = null;
+    clearTimer();
+    const wasHeld = held.current;
+    held.current = false;
+    if (wasHeld) callbacks.current.onHoldEnd?.();
+    if (updateVisual) setVisual("idle");
+    try {
+      if (press?.target.hasPointerCapture(press.id)) press.target.releasePointerCapture(press.id);
+    } catch { /* The browser may already have released capture. */ }
+    return wasHeld;
+  };
+  const cancel = (updateVisual = true) => {
+    skipClick.current = true;
+    clearTap();
+    finish(updateVisual);
+  };
+  const cancelRef = useRef(cancel);
+  cancelRef.current = cancel;
+
+  useEffect(() => {
+    const onBlur = () => cancelRef.current();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") cancelRef.current();
+    };
+    const onOtherPointer = (event: PointerEvent) => {
+      if (down.current && event.pointerId !== down.current.id) cancelRef.current();
+    };
+    const onOutsideRelease = (event: PointerEvent) => {
+      if (down.current?.id === event.pointerId) cancelRef.current();
+    };
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("pointerdown", onOtherPointer, true);
+    window.addEventListener("pointerup", onOutsideRelease);
+    window.addEventListener("pointercancel", onOutsideRelease);
+    return () => {
+      cancelRef.current(false);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("pointerdown", onOtherPointer, true);
+      window.removeEventListener("pointerup", onOutsideRelease);
+      window.removeEventListener("pointercancel", onOutsideRelease);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!p.interactive) cancelRef.current();
+  }, [p.interactive]);
+
+  const open = () => {
+    clearTap();
+    if (!callbacks.current.interactive || skipClick.current) return;
+    skipClick.current = true;
+    callbacks.current.onOpen?.();
+  };
+  const onDown = (event: RPointerEvent<HTMLButtonElement>) => {
+    if (!p.interactive || down.current || event.isPrimary === false || event.button !== 0) return;
+    clearTap();
+    clearTimer();
+    skipClick.current = false;
+    held.current = false;
+    down.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      bounds: event.currentTarget.getBoundingClientRect(),
+      target: event.currentTarget,
+    };
+    // Resume Web Audio during the user gesture, not later inside the timeout.
+    p.onPressStart?.();
+    setVisual("pressed");
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch { /* Older WebViews still have the window release listener. */ }
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      if (!down.current || !callbacks.current.interactive) return;
+      held.current = true;
+      skipClick.current = true;
+      setVisual("holding");
+      callbacks.current.onHoldStart?.();
+    }, 350);
+  };
+  const onUp = (event: RPointerEvent<HTMLButtonElement>) => {
+    if (down.current?.id !== event.pointerId) return;
+    const wasHeld = finish();
+    if (wasHeld || skipClick.current) return;
+    // Usually the native button click opens the dialog. This fallback also
+    // covers Android WebViews that omit that click after a touch release.
+    if (event.pointerType !== "mouse") tapTimer.current = window.setTimeout(open, 80);
+  };
+  return (
+    <button
+      type="button"
+      className={cs("chord-card", visual !== "idle" && "chord-card-pressed", visual === "holding" && "chord-card-sounding")}
+      style={p.style}
+      disabled={!p.interactive}
+      aria-haspopup="dialog"
+      aria-label={p.interactive ? "Accord : toucher pour régler, appui long pour l'entendre" : undefined}
+      onPointerDown={onDown}
+      onPointerMove={(event) => {
+        const press = down.current;
+        if (!press || press.id !== event.pointerId) return;
+        const { left, right, top, bottom } = press.bounds;
+        const outside = event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom;
+        const moving = !held.current && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 12;
+        if (outside || moving) cancel();
+      }}
+      onPointerUp={onUp}
+      onPointerCancel={() => cancel()}
+      onLostPointerCapture={(event) => {
+        if (down.current?.id === event.pointerId) cancel();
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        open();
+      }}
+      onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.stopPropagation();
+          if (event.repeat) event.preventDefault();
+          else skipClick.current = false;
+        }
+      }}
+    >
+      {p.children}
+    </button>
+  );
+}
+
+/** A long touch toggles a key without also firing its normal short-click action. */
+function PlayKey({
+  className,
+  style,
+  title,
+  onShort,
+  onLong,
+  children,
+}: {
+  className: string;
+  style: CSSProperties;
+  title: string;
+  onShort: () => void;
+  onLong: () => void;
+  children: React.ReactNode;
+}) {
+  const timer = useRef<number | null>(null);
+  const origin = useRef({ x: 0, y: 0 });
+  const skipClick = useRef(false);
+  const clear = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => clear, []);
+
+  return (
+    <div
+      className={className}
+      style={style}
+      role="button"
+      tabIndex={0}
+      title={title}
+      onPointerDown={(e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        skipClick.current = false;
+        origin.current = { x: e.clientX, y: e.clientY };
+        clear();
+        timer.current = window.setTimeout(() => {
+          timer.current = null;
+          skipClick.current = true;
+          buzz(12);
+          onLong();
+        }, 420);
+      }}
+      onPointerMove={(e) => {
+        if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 12) {
+          clear();
+          skipClick.current = true;
+        }
+      }}
+      onPointerUp={clear}
+      onPointerCancel={() => {
+        clear();
+        skipClick.current = true;
+      }}
+      onPointerLeave={clear}
+      onContextMenu={(e) => e.preventDefault()}
+      onClick={() => {
+        if (!skipClick.current) onShort();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onShort();
+        }
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export type KeyboardViewProps = {
   kb: KB;
   width: number;
@@ -499,11 +770,19 @@ export type KeyboardViewProps = {
   onDir: (d: 0 | 1) => void;
   onMode: (m: "maj" | "min") => void;
   onRight: (id: string) => void;
+  onLongRight?: (id: string) => void;
   onRightRoot: (b: { m: [number, number] }, d: 0 | 1) => void;
   onLeft: (ix: number, d: 0 | 1) => void;
+  onLongLeft?: (ix: number) => void;
   onEditRight: (key: string) => void;
   onEditLeft: (key: string) => void;
   onRaz: () => void;
+  onMenu?: () => void;
+  /** carte de l'accord : toucher = réglage, appui long = son tenu */
+  onCardOpen?: () => void;
+  onCardPressStart?: () => void;
+  onCardHoldStart?: () => void;
+  onCardHoldEnd?: () => void;
 };
 
 export function KeyboardView(p: KeyboardViewProps) {
@@ -636,21 +915,18 @@ export function KeyboardView(p: KeyboardViewProps) {
       const isCand = b.m[d] > 0 && vm.cp.includes(pc);
       const sel = vm.selected.has(k);
       return (
-        <div
+        <PlayKey
           key={k}
           className={cs("w", isCand ? "cand" : "dim", vm.roots.has(k) && "root")}
           style={pos}
-          onClick={() => (isCand ? p.onRight(k) : b.m[d] > 0 && p.onRightRoot(b, d))}
-          role="button"
-          tabIndex={0}
-          title={isCand ? "Placer cette note en bas de la fenêtre" : "Choisir cette note comme fondamentale"}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              if (isCand) p.onRight(k);
-              else if (b.m[d] > 0) p.onRightRoot(b, d);
-            }
+          onShort={() => {
+            if (isCand) p.onRight(k);
+            else if (b.m[d] > 0) p.onRightRoot(b, d);
           }}
+          onLong={() => {
+            if (b.m[d] > 0) p.onLongRight?.(k);
+          }}
+          title="Toucher : choisir la note. Appui long : ajouter ou retirer cette touche de l'accord."
         >
           <div
             className={cs("c", d ? "pl" : "ph", sel && "sel", vm.q4.includes(pc) && "it")}
@@ -659,7 +935,7 @@ export function KeyboardView(p: KeyboardViewProps) {
             {b.m[d] > 0 ? pn(b.m[d]) : "—"}
           </div>
           <em>{btnLab(b)}</em>
-        </div>
+        </PlayKey>
       );
     });
   };
@@ -744,14 +1020,17 @@ export function KeyboardView(p: KeyboardViewProps) {
       const pick = vm.leftPick.has(ix);
       const alt = vm.leftAlt.has(ix);
       return (
-        <div
+        <PlayKey
           key={ix}
           className={cs("w cand", !pick && !alt && "dim", alt && "alt", pick && k === root && "root")}
           style={pos}
-          onClick={() => k >= 0 && p.onLeft(ix, d)}
-          role="button"
-          tabIndex={0}
-          title={x.up ? "Basse" : "Accord"}
+          onShort={() => {
+            if (k >= 0) p.onLeft(ix, d);
+          }}
+          onLong={() => {
+            if (k >= 0) p.onLongLeft?.(ix);
+          }}
+          title={`${x.up ? "Basse" : "Accord"}. Appui long : ajouter ou retirer cette touche.`}
         >
           <div
             className={cs("c", d ? "pl" : "ph", pick && "sel", vm.q4.includes(k) && "it")}
@@ -760,7 +1039,7 @@ export function KeyboardView(p: KeyboardViewProps) {
           >
             {k >= 0 ? ld(x.lab[d]) : "—"}
           </div>
-        </div>
+        </PlayKey>
       );
     });
   };
@@ -776,8 +1055,12 @@ export function KeyboardView(p: KeyboardViewProps) {
     >
       {/* colonne gauche : composition de l'accord + basses + joystick */}
       <div className="col" style={V({ width: `${W0}px`, height: `${Hc}px` })}>
-        <div
-          className="chord-card"
+        <ChordCard
+          interactive={!edit}
+          onOpen={p.onCardOpen}
+          onPressStart={p.onCardPressStart}
+          onHoldStart={p.onCardHoldStart}
+          onHoldEnd={p.onCardHoldEnd}
           style={V({
             left: `${Math.round((W0 - Cd) / 2)}px`,
             top: 0,
@@ -800,7 +1083,7 @@ export function KeyboardView(p: KeyboardViewProps) {
                 ))
               : "Touche une note"}
           </span>
-        </div>
+        </ChordCard>
 
         <div
           className="hand"
@@ -820,6 +1103,7 @@ export function KeyboardView(p: KeyboardViewProps) {
           onDir={p.onDir}
           onMode={p.onMode}
           onRaz={p.onRaz}
+          onMenu={p.onMenu}
           isEdit={!!edit}
         />
       </div>

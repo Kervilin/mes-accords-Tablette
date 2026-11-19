@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bellows, KeyboardView } from "@/components/Accordion";
 import { Icon, Reveal, Toast } from "@/components/Chrome";
 import { DiagSheet, FullscreenHint, IconSheet, InstallSheet } from "@/components/Mobile";
-import { blip, playChord, stopChord } from "@/lib/audio";
+import { ChordMenu, HelpSheet } from "@/components/Help";
+import { ChordPicker } from "@/components/ChordPicker";
+import { blip, holdChord, playChord, prepareAudio, stopChord } from "@/lib/audio";
 import { autoFullscreenOnFirstGesture, exitFullscreen, isStandaloneMode, loadFsAuto, saveFsAuto, useFullscreen } from "@/lib/fullscreen";
 import { registerSW, useInstall, usePwaStatus } from "@/lib/pwa";
 import { isNative, nativeFullscreen, onAndroidBack } from "@/lib/native";
@@ -32,6 +34,7 @@ import {
   N,
   NP,
   OTH,
+  buildManualView,
   buildView,
   isSym,
   ld,
@@ -88,6 +91,15 @@ export default function App() {
   const [toastTxt, setToastTxt] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [installOpen, setInstallOpen] = useState(false);
+    const [bellowsPos, setBellowsPos] = useState<"top" | "bottom">("top");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [chordMenu, setChordMenu] = useState(false);
+  const [picker, setPicker] = useState(false);
+  const [manual, setManual] = useState<{
+    right: Set<string>;
+    left: Set<number>;
+    touchedLeft: Set<number>;
+  } | null>(null);
   /* Textes d'aide / légendes : masqués par défaut, réaffichés avec le bouton T */
   /* taille du clavier : null = ajusté automatiquement à l'écran ; sinon choisie au pincement */
   const [kbZoom, setKbZoom] = useState<number | null>(() => {
@@ -151,6 +163,7 @@ export default function App() {
   const stripRef = useRef<HTMLDivElement | null>(null);
   const toastTimer = useRef<number | null>(null);
   const playTimer = useRef<number | null>(null);
+  const cardSound = useRef(false);
 
   /* micro */
   const micRef = useRef<{
@@ -194,7 +207,112 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToastTxt(null), 4200);
   }, []);
 
-  const vm = useMemo(() => buildView(kb, S), [kb, S]);
+  const automatic = useMemo(() => buildView(kb, S), [kb, S]);
+    /* ---------- export JSON ---------- */
+  const exportKB = () => {
+    if (!kb) {
+      toast("Aucun clavier à exporter.");
+      return;
+    }
+    const data = {
+      name: cur ?? "Mon clavier",
+      exportedAt: new Date().toISOString(),
+      keyboard: kb
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(cur ?? "clavier").replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast(`Clavier « ${cur ?? "Mon clavier"} » exporté en JSON.`);
+  };
+
+  /* ---------- import JSON ---------- */
+  /* ---------- import JSON ---------- */
+  const importKB = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    
+    input.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data.keyboard || !data.keyboard.b || !data.keyboard.l) {
+          toast("Fichier JSON invalide : structure incorrecte.");
+          return;
+        }
+        const name = data.name || file.name.replace(/\.json$/i, '');
+        
+        // 1. Écrire le clavier dans localStorage
+        const nl = writeKB(name, toCSV(data.keyboard), list);
+        
+        // 2. Mettre à jour la liste
+        setList(nl);
+        
+        // 3. Charger le clavier
+        setKb(data.keyboard);
+        setCur(name);
+        try {
+          localStorage.setItem("mac_kb_name", name);
+        } catch {}
+        resetSel();
+        
+        toast(`Clavier « ${name} » importé avec succès.`);
+      } catch (err) {
+        toast("Erreur lors de l'import : fichier JSON invalide.");
+        console.error(err);
+      } finally {
+        document.body.removeChild(input);
+      }
+    });
+    
+    input.click();
+  };
+  const vm = useMemo(
+    () => manual ? buildManualView(kb, S, manual.right, manual.left, manual.touchedLeft) : automatic,
+    [kb, S, automatic, manual],
+  );
+  // A new chord, direction, keyboard or edit session resumes automatic fingering.
+  useEffect(() => setManual(null), [S.root, S.enr, S.mode, S.dir, S.tierces, kb, edit]);
+
+  const toggleManualRight = (id: string) => {
+    if (edit || S.root < 0) return;
+    setManual((current) => {
+      const right = new Set(current?.right ?? automatic.selected);
+      // Manual fingering starts with the lit right-hand keys; left-hand
+      // accompaniment is added only if the player explicitly selects it.
+      const left = new Set(current?.left);
+      if (right.has(id)) right.delete(id);
+      else right.add(id);
+      return { right, left, touchedLeft: new Set(current?.touchedLeft) };
+    });
+  };
+  const toggleManualLeft = (ix: number) => {
+    if (edit || S.root < 0) return;
+    setManual((current) => {
+      const right = new Set(current?.right ?? automatic.selected);
+      // Long-pressing a left-hand key means that the player takes over the
+      // left hand: the first press clears ALL automatic bass and chord
+      // suggestions, so none of them stays lit after the manual choice.
+      const left = new Set(current?.left);
+      const touchedLeft = new Set<number>();
+      if (left.has(ix)) left.delete(ix);
+      else left.add(ix);
+      touchedLeft.add(ix);
+      return { right, left, touchedLeft };
+    });
+  };
 
   /* ---------- initialisation ---------- */
   useEffect(() => {
@@ -423,11 +541,34 @@ export default function App() {
   useEffect(() => () => stopMic(), [stopMic]);
 
   /* ---------- lecture audio ---------- */
+  const stopPlayback = useCallback(() => {
+    if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+    playTimer.current = null;
+    cardSound.current = false;
+    stopChord();
+    setPlaying(false);
+  }, []);
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") stopPlayback();
+    };
+    window.addEventListener("blur", stopPlayback);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("blur", stopPlayback);
+      document.removeEventListener("visibilitychange", onHidden);
+      if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+      stopChord();
+    };
+  }, [stopPlayback]);
+
+  const soundingNotes = vm.playMidis.join(",");
+  useEffect(() => stopPlayback(), [soundingNotes, !!edit, stopPlayback]);
+
   const togglePlay = useCallback(() => {
     if (playing) {
-      stopChord();
-      setPlaying(false);
-      if (playTimer.current) window.clearTimeout(playTimer.current);
+      stopPlayback();
       return;
     }
     if (!vm.playMidis.length) {
@@ -435,10 +576,12 @@ export default function App() {
       return;
     }
     if (playChord(vm.playMidis)) {
+      if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+      cardSound.current = false;
       setPlaying(true);
-      playTimer.current = window.setTimeout(() => setPlaying(false), 2000);
+      playTimer.current = window.setTimeout(stopPlayback, 2000);
     } else toast("Audio indisponible sur ce navigateur.");
-  }, [playing, vm.playMidis, toast]);
+  }, [playing, vm.playMidis, toast, stopPlayback]);
 
   /* ---------- plein écran ---------- */
   const toggleFullscreen = useCallback(async () => {
@@ -465,6 +608,25 @@ export default function App() {
 
   /* ---------- actions clavier (musique) ---------- */
   const resetSel = () => setS((s) => ({ ...s, root: -1, dir: 1, low: null }));
+
+  /** Tierces (accords de gauche à 3 notes) : bascule, mémorisée */
+  const toggleTierces = () => {
+    const v = !S.tierces;
+    setS((s) => ({ ...s, tierces: v, low: null }));
+    saveTierces(v);
+    toast(v ? "Avec tierce : accords de gauche à 3 notes." : "Sans tierce : accords de gauche à 2 notes.");
+  };
+  /** appui long sur la carte : l'accord sonne tant que le doigt reste posé */
+  const cardHoldStart = () => {
+    stopPlayback();
+    if (vm.none || !vm.playMidis.length) return;
+    cardSound.current = holdChord(vm.playMidis);
+    setPlaying(cardSound.current);
+    if (!cardSound.current) toast("Audio indisponible sur ce navigateur.");
+  };
+  const cardHoldEnd = () => {
+    if (cardSound.current) stopPlayback();
+  };
 
   const setDir = (d: 0 | 1) => {
     setS((s) => ({ ...s, dir: d }));
@@ -755,6 +917,9 @@ export default function App() {
   /* ---------- bouton « retour » Android (appli native) ---------- */
   const backRef = useRef<() => boolean>(() => false);
   backRef.current = () => {
+    if (helpOpen) return setHelpOpen(false), true;
+    if (picker) return setPicker(false), true;
+    if (chordMenu) return setChordMenu(false), true;
     if (ask) return setAsk(null), true;
     if (diagOpen) return setDiagOpen(false), true;
     if (iconOpen) return setIconOpen(false), true;
@@ -791,7 +956,10 @@ export default function App() {
       const t = e.target as HTMLElement | null;
       const typing = !!t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
       if (e.key === "Escape") {
-        if (ask) setAsk(null);
+        if (helpOpen) setHelpOpen(false);
+        else if (picker) setPicker(false);
+        else if (chordMenu) setChordMenu(false);
+        else if (ask) setAsk(null);
         else if (edit) cancelEdit();
         else resetSel();
         return;
@@ -889,7 +1057,32 @@ export default function App() {
       ) : (
         /* ======= en-tête ======= */
         <header className="panel rise overflow-hidden">
-          <Bellows open={S.dir ? 78 : 30} playing={playing} flush />
+              {bellowsPos === "top" && (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="flex-1"
+                  onClick={() => setDir(S.dir ? 0 : 1)}
+                  title={S.dir ? "Cliquez pour passer en Poussé" : "Cliquez pour passer en Tiré"}
+                  style={{ cursor: "pointer" }}
+                  role="button"
+                  aria-label="Basculer entre Poussé et Tiré"
+                >
+                  <Bellows open={S.dir ? 78 : 30} playing={playing} flush />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBellowsPos("bottom")}
+                  title="Déplacer l'accordéon en bas"
+                  aria-label="Déplacer l'accordéon en bas"
+                  className="ch grid h-9 w-9 min-h-[38px] shrink-0 place-items-center p-0 transition-transform hover:rotate-180"
+                  style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l-4-4M17 20l4-4" />
+                  </svg>
+                </button>
+              </div>
+              )}
           <div className="flex flex-wrap items-end gap-2 p-2.5 sm:p-3">
             <div
               className="flex w-full flex-1 flex-wrap items-center gap-1.5 rounded-2xl border p-1.5"
@@ -929,6 +1122,18 @@ export default function App() {
                 onClick={startEdit}
               >
                 <Icon n="tune" />
+              </button>
+              <button
+                type="button"
+                title="Gérer le clavier (Enregistrer / Exporter / Importer / Supprimer)"
+                aria-label="Gérer le clavier"
+                className="ch grid h-9 w-9 min-h-[38px] place-items-center p-0"
+                onClick={() => setAsk({ kind: "manage", value: "" })}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+                </svg>
               </button>
               <button
                 type="button"
@@ -988,6 +1193,29 @@ export default function App() {
             </div>
           </div>
         </header>
+      )}
+
+      {/* ======= signature + bouton Mode d'emploi (affichés par le bouton i) ======= */}
+      {!edit && showTexts && (
+        <>
+          <p
+            className="mt-2.5 text-center text-[11.5px] leading-snug"
+            style={{ color: "var(--c-mu)" }}
+          >
+            Appli développée par Denis <span aria-hidden="true">·</span> 11/2026
+          </p>
+          <button
+            type="button"
+            className="ch mt-1.5 flex w-full items-center justify-center gap-2 text-[15px] font-bold"
+            style={{ background: "var(--c-card)", borderColor: "var(--c-sel)", color: "var(--c-tx)" }}
+            onClick={() => setHelpOpen(true)}
+          >
+            <span style={{ color: "var(--c-sel)" }} className="inline-flex">
+              <Icon n="info" className="h-[1.2em] w-[1.2em]" />
+            </span>
+            Mode d'emploi
+          </button>
+        </>
       )}
 
       {/* ======= console accord ======= */}
@@ -1153,7 +1381,11 @@ export default function App() {
             onMode={(m) => {
               if (!isSym(S.enr)) setS((s) => ({ ...s, mode: m, low: null }));
             }}
-            onRight={(id) => setS((s) => ({ ...s, low: id }))}
+            onRight={(id) => {
+              setManual(null);
+              setS((s) => ({ ...s, low: id }));
+            }}
+            onLongRight={toggleManualRight}
             onRightRoot={(b, dd) =>
               b.m[dd] > 0 && setS((s) => ({ ...s, root: pcOf(b.m[dd]), dir: dd, low: null }))
             }
@@ -1161,6 +1393,7 @@ export default function App() {
               kb.l[ix].k[dd] >= 0 &&
               setS((s) => ({ ...s, root: kb.l[ix].k[dd], dir: dd, low: null }))
             }
+            onLongLeft={toggleManualLeft}
             onEditRight={pickRight}
             onEditLeft={pickLeft}
             onRaz={() => {
@@ -1170,6 +1403,13 @@ export default function App() {
                 resetSel();
               }
             }}
+            onMenu={edit ? undefined : () => setChordMenu(true)}
+            onCardOpen={() => {
+              if (!edit) setPicker(true);
+            }}
+            onCardPressStart={prepareAudio}
+            onCardHoldStart={cardHoldStart}
+            onCardHoldEnd={cardHoldEnd}
           />
         </div>
 
@@ -1472,51 +1712,105 @@ export default function App() {
                   ? "Enregistrer sous…"
                   : ask.kind === "newkb"
                     ? "Nouveau clavier"
-                    : "Supprimer le clavier"}
+                    : ask.kind === "manage"
+                      ? "Gérer le clavier"
+                      : "Supprimer le clavier"}
             </h2>
-            <p className="mt-1 text-[13.5px]" style={{ color: "var(--c-mu)" }}>
-              {ask.kind === "delete"
-                ? `« ${cur} » sera effacé de ce navigateur. Cette action est définitive.`
-                : ask.kind === "saveedit"
-                  ? `Choisis le nom du clavier (${comp.done}/${comp.total} notes renseignées).`
-                  : ask.kind === "newkb"
-                    ? "Un clavier d'usine sera créé sous ce nom."
-                    : "Une copie du clavier actuel sera enregistrée sous ce nom."}
-            </p>
-            {ask.kind !== "delete" && (
-              <input
-                autoFocus
-                value={ask.value}
-                onChange={(e) => setAsk({ ...ask, value: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") confirmAsk();
-                }}
-                placeholder="Nom du clavier"
-                className="mt-3 min-h-[46px] w-full rounded-xl border px-3 text-[16px] font-semibold outline-none"
-                style={{ borderColor: "var(--c-bd)", background: "var(--c-bg2)", color: "var(--c-tx)" }}
-              />
+
+            {ask.kind === "manage" ? (
+              <>
+                <p className="mt-1 text-[13.5px]" style={{ color: "var(--c-mu)" }}>
+                  Que souhaitez-vous faire avec le clavier « {cur ?? "Mon clavier"} » ?
+                </p>
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                    onClick={() => setAsk({ kind: "saveas", value: cur ?? "Mon clavier" })}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="save" /> Enregistrer sous…
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                    onClick={() => { setAsk(null); exportKB(); }}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="export" /> Exporter (télécharger en JSON)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+                    onClick={() => { setAsk(null); importKB(); }}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="export" /> Importer (depuis un fichier JSON)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ch min-h-[44px] text-[14px]"
+                    style={{ background: "var(--c-sel)", borderColor: "var(--c-sel)", color: "var(--c-selt)" }}
+                    onClick={() => setAsk({ kind: "delete", value: "" })}
+                  >
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <Icon n="trash" /> Supprimer ce clavier
+                    </span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-[13.5px]" style={{ color: "var(--c-mu)" }}>
+                  {ask.kind === "delete"
+                    ? `⚠️ Êtes-vous sûr de vouloir supprimer « ${cur} » ? Cette action est irréversible. Le clavier sera définitivement effacé de ce navigateur.`
+                    : ask.kind === "saveedit"
+                      ? `Choisis le nom du clavier (${comp.done}/${comp.total} notes renseignées).`
+                      : ask.kind === "newkb"
+                        ? "Un clavier d'usine sera créé sous ce nom."
+                        : "Une copie du clavier actuel sera enregistrée sous ce nom."}
+                </p>
+                {ask.kind !== "delete" && (
+                  <input
+                    autoFocus
+                    value={ask.value}
+                    onChange={(e) => setAsk({ ...ask, value: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") confirmAsk();
+                    }}
+                    placeholder="Nom du clavier"
+                    className="mt-3 min-h-[46px] w-full rounded-xl border px-3 text-[16px] font-semibold outline-none"
+                    style={{ borderColor: "var(--c-bd)", background: "var(--c-bg2)", color: "var(--c-tx)" }}
+                  />
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button type="button" className="ch flex-1" onClick={() => setAsk(null)}>
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className="ch flex-1"
+                    style={{
+                      background: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
+                      borderColor: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
+                      color: ask.kind === "delete" ? "var(--c-selt)" : "var(--c-bg)",
+                    }}
+                    onClick={confirmAsk}
+                  >
+                    {ask.kind === "delete" ? "Supprimer" : "Enregistrer"}
+                  </button>
+                </div>
+              </>
             )}
-            <div className="mt-3 flex gap-2">
-              <button type="button" className="ch flex-1" onClick={() => setAsk(null)}>
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="ch flex-1"
-                style={{
-                  background: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
-                  borderColor: ask.kind === "delete" ? "var(--c-sel)" : "var(--c-tx)",
-                  color: ask.kind === "delete" ? "var(--c-selt)" : "var(--c-bg)",
-                }}
-                onClick={confirmAsk}
-              >
-                {ask.kind === "delete" ? "Supprimer" : "Enregistrer"}
-              </button>
-            </div>
           </div>
         </div>
       )}
-
       <FullscreenHint
         open={fsHint}
         onClose={() => setFsHint(false)}
@@ -1562,6 +1856,38 @@ export default function App() {
         }}
       />
 
+      <ChordPicker
+        open={picker}
+        root={S.root}
+        enr={S.enr}
+        mode={S.mode}
+        isSym={isSym(S.enr)}
+        tierces={S.tierces}
+        onRoot={(value) => {
+          setManual(null);
+          setS((st) => ({ ...st, root: value, low: null }));
+        }}
+        onEnr={(v) => {
+          setManual(null);
+          setS((st) => ({ ...st, enr: v, low: null, more: false }));
+        }}
+        onMode={(m) => {
+          if (!isSym(S.enr)) {
+            setManual(null);
+            setS((st) => ({ ...st, mode: m, low: null }));
+          }
+        }}
+        onTierces={toggleTierces}
+        onClose={() => setPicker(false)}
+      />
+      <ChordMenu
+        open={chordMenu}
+        enr={S.enr}
+        onPick={(v) => setS((st) => ({ ...st, enr: v, low: null, more: false }))}
+        onClose={() => setChordMenu(false)}
+      />
+      <HelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
+
       <InstallSheet
         open={installOpen}
         onClose={() => setInstallOpen(false)}
@@ -1583,6 +1909,34 @@ export default function App() {
           }
         }}
       />
+            {bellowsPos === "bottom" && (
+        <div className="panel rise mt-2.5 p-2.5 sm:p-3">
+          <div className="flex items-center gap-1.5">
+            <div
+              className="flex-1"
+              onClick={() => setDir(S.dir ? 0 : 1)}
+              title={S.dir ? "Cliquez pour passer en Poussé" : "Cliquez pour passer en Tiré"}
+              style={{ cursor: "pointer" }}
+              role="button"
+              aria-label="Basculer entre Poussé et Tiré"
+            >
+              <Bellows open={S.dir ? 78 : 30} playing={playing} flush />
+            </div>
+            <button
+              type="button"
+              onClick={() => setBellowsPos("top")}
+              title="Remonter l'accordéon en haut"
+              aria-label="Remonter l'accordéon en haut"
+              className="ch grid h-9 w-9 min-h-[38px] shrink-0 place-items-center p-0 transition-transform hover:rotate-180"
+              style={{ background: "var(--c-card)", borderColor: "var(--c-bd)", color: "var(--c-tx)" }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 8v12M7 20l-4-4M7 20l4-4M17 16V4M17 4l-4 4M17 4l4 4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       <Toast text={toastTxt} />
     </div>
