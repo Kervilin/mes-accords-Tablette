@@ -818,3 +818,145 @@ kbd {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ============================================================
+   Mode piano — une octave Do → Si
+   ============================================================ */
+.piano-card {
+  position: relative;
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+.piano-card:active {
+  transform: scale(0.98);
+}
+.piano-card-name {
+  font-size: clamp(30px, 7vw, 46px);
+  min-height: 1em;
+}
+.piano-card-notes {
+  font-size: clamp(12px, 2.4vw, 15px);
+}
+.piano-card-hint {
+  margin-top: 2px;
+  font-size: clamp(10px, 1.8vw, 11.5px);
+  letter-spacing: 0.02em;
+  color: var(--c-mu);
+  pointer-events: none;
+}
+.chord-card-sounding .piano-card-name {
+  color: var(--c-sel);
+}
+
+.piano {
+  position: relative;
+  width: 100%;
+  height: clamp(150px, 30vh, 240px);
+  padding-bottom: 18px;
+  --bw: 8.5%;
+  touch-action: manipulation;
+}
+.piano-whites {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  height: 100%;
+}
+.piano-key {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-bottom: 10px;
+  border: 1px solid var(--c-bd);
+  border-radius: 6px 6px 10px 10px;
+  background: linear-gradient(180deg, var(--c-paper) 0%, #e7edf5 78%, #ccd6e2 100%);
+  color: var(--c-ink);
+  box-shadow: 0 4px 0 #aeb9c7, 0 10px 18px -10px rgba(0, 0, 0, 0.65);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.12s ease;
+  touch-action: manipulation;
+}
+.piano-key:hover {
+  filter: brightness(1.03);
+}
+.piano-key:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #aeb9c7;
+}
+.piano-key.on {
+  background: linear-gradient(180deg, #f06a7d 0%, var(--c-sel) 45%, #a91d33 100%);
+  border-color: #8f182b;
+  color: var(--c-selt);
+  box-shadow: 0 4px 0 #7c1425, 0 12px 22px -12px rgba(224, 52, 78, 0.9);
+}
+.piano-key-label {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: clamp(13px, 2.6vw, 19px);
+  letter-spacing: -0.01em;
+}
+.piano-key-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.piano-black {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: var(--bw);
+  height: 62%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  border: 1px solid #0b1016;
+  border-radius: 4px 4px 8px 8px;
+  background: linear-gradient(180deg, #2b3642 0%, #141c24 70%, #0a0f14 100%);
+  color: #cfd9e4;
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: clamp(9px, 1.7vw, 12px);
+  box-shadow: 0 5px 0 #05090d, 0 12px 20px -10px rgba(0, 0, 0, 0.85);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.12s ease;
+  touch-action: manipulation;
+}
+.piano-black:active {
+  transform: translateY(2px);
+  box-shadow: 0 3px 0 #05090d;
+}
+.piano-black.on {
+  background: linear-gradient(180deg, #f0707f 0%, var(--c-sel) 50%, #98162a 100%);
+  border-color: #6f0f1f;
+  color: #fff;
+  box-shadow: 0 5px 0 #6d1020, 0 12px 22px -10px rgba(224, 52, 78, 0.85);
+}
+.piano-black.on span {
+  color: #fff;
+}
+
+/* Balayage horizontal : on réserve le geste à l'application (le défilement
+   vertical reste possible), sauf sur le clavier d'accordéon qui garde son
+   pincement à deux doigts. */
+html,
+body {
+  touch-action: pan-y;
+}
+.piano,
+.piano-whites,
+.piano-key,
+.piano-black {
+  touch-action: none;
+}

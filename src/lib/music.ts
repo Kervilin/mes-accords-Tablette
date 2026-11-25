@@ -122,6 +122,46 @@ export function intervals(enr: string, t: number): number[] {
   }
 }
 
+/* ---------- Reconnaissance d'un accord à partir de ses notes ---------- */
+/** Ordre de préférence des qualités d'accord lors de la reconnaissance. */
+const RECOGNITION_ORDER = ["par", "s7", "s7M", "s9", "s6", "a9", "sus4", "sus2", "q5"] as const;
+export type ChordId = { root: number; enr: string; mode: "maj" | "min"; name: string };
+export const chordLabel = (root: number, enr: string, mode: "maj" | "min") =>
+  pn(root) + (!isSym(enr) && mode === "min" ? "m" : "") + (SUF[enr] ?? "");
+
+/**
+ * Reconnaît l'accord formé par un ensemble de notes, quel que soit l'ordre
+ * (renversements compris). `preferredRoot` est essayé en premier, puis chaque
+ * note jouée. Retourne null si les notes ne forment aucun accord connu.
+ */
+export function identifyChord(
+  pcs: Iterable<number>,
+  preferredRoot = -1,
+  preferredMode?: "maj" | "min",
+): ChordId | null {
+  const list = [...new Set([...pcs].map(pcOf))];
+  if (list.length < 2) return null;
+  const roots: number[] = [];
+  if (preferredRoot >= 0) roots.push(pcOf(preferredRoot));
+  for (const pc of list) if (!roots.includes(pc)) roots.push(pc);
+  const modes: ("maj" | "min")[] =
+    preferredMode === "min" ? ["min", "maj"] : preferredMode === "maj" ? ["maj", "min"] : ["maj", "min"];
+  const sorted = (x: number[]) => [...x].sort((a, b) => a - b);
+  const target = sorted(list);
+  for (const root of roots) {
+    for (const mode of modes) {
+      const t = mode === "min" ? 3 : 4;
+      for (const enr of RECOGNITION_ORDER) {
+        const expected = sorted([...new Set(intervals(enr, t).map((iv) => pcOf(root + iv)))]);
+        if (expected.length === target.length && expected.every((pc, i) => pc === target[i])) {
+          return { root, enr, mode, name: chordLabel(root, enr, mode) };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export const btnId = (b: Btn) => b.r + "-" + b.n;
 export const btnLab = (b: Btn) => b.n + (["", "′", "″"][b.r] ?? "");
 
@@ -390,10 +430,19 @@ export function buildManualView(
   right: ReadonlySet<string>,
   left: ReadonlySet<number>,
   touchedLeft: ReadonlySet<number> = new Set(),
+  /** hauteur retenue pour chaque bouton, indépendante du sens du soufflet */
+  pitches: ReadonlyMap<string, number> = new Map(),
+  /** Notes choisies hors clavier (mode piano) : elles définissent le rond et le nom. */
+  extraNotes: Iterable<number> = [],
 ): VM {
   const base = buildView(kb, S);
-  if (S.root < 0) return base;
-  const pickedRight = kb.b.filter((b) => right.has(btnId(b)) && b.m[S.dir] > 0);
+  const extra = [...new Set([...extraNotes].map(pcOf))];
+  if (S.root < 0 && !extra.length) return base;
+  // La note d'un bouton est celle mémorisée au moment du choix ; à défaut, celle
+  // du sens courant. Une note peut donc rester sélectionnée en changeant de sens.
+  const pitchOf = (b: Btn) => pitches.get(btnId(b)) ?? b.m[S.dir];
+  // Attention : la classe de hauteur 0 (Do) est une note valide, pas une absence.
+  const pickedRight = kb.b.filter((b) => right.has(btnId(b)) && (pitches.has(btnId(b)) || b.m[S.dir] > 0));
   const pickedLeft = kb.l.filter((b, ix) => left.has(ix) && b.k[S.dir] >= 0);
   const bass = pickedLeft.find((b) => b.up) ?? null;
   const chord = pickedLeft.find((b) => !b.up) ?? null;
@@ -403,40 +452,47 @@ export function buildManualView(
       ? leftTriad(chord.k[S.dir])
       : [chord.k[S.dir], pcOf(chord.k[S.dir] + 7)]
     : [];
+  const rightNotes = pickedRight.map(pitchOf);
+  /* Une même hauteur peut être portée par plusieurs boutons (ex. le bouton
+     Do/Do). On les compte séparément pour que le rond affiche bien les notes
+     choisies, sans « perdre » un Do au passage. */
+  const fold = (list: number[]) => {
+    const sorted = [...list].sort((a, b) => a - b);
+    const out: number[] = [];
+    let last = NaN;
+    for (const pc of sorted) {
+      if (pc !== last) out.push(pc);
+      last = pc;
+    }
+    return out;
+  };
   const midis = [
-    ...pickedRight.map((b) => b.m[S.dir]),
+    ...rightNotes,
     ...bassNotes.map((p) => 36 + p),
     ...chordNotes.map((p) => 48 + p),
   ].sort((a, b) => a - b);
   // Automatic bass/chord suggestions do not define the requested composition:
   // only the selected right-hand keys and left-hand keys explicitly long-pressed do.
   const composition = [
-    ...pickedRight.map((b) => b.m[S.dir]),
+    ...rightNotes,
     ...pickedLeft.filter((b) => touchedLeft.has(kb.l.indexOf(b))).flatMap((b) =>
       b.up ? [b.k[S.dir]] : S.tierces ? leftTriad(b.k[S.dir]) : [b.k[S.dir], pcOf(b.k[S.dir] + 7)],
     ),
   ];
-  const pcs = [...new Set(composition.map(pcOf))];
-  const ordered = pcs.sort((a, b) => pcOf(a - S.root) - pcOf(b - S.root));
-  const degrees = ordered.map((p) => pcOf(p - S.root)).sort((a, b) => a - b);
-
-  let recognized: { enr: string; mode: "maj" | "min" } | null = null;
-  if (degrees.includes(0)) {
-    for (const enr of ["par", "s7", "s9", "q5", "sus2", "sus4", "s6", "s7M", "a9"]) {
-      for (const mode of [S.mode, S.mode === "maj" ? "min" : "maj"] as const) {
-        const expected = [...new Set(intervals(enr, mode === "min" ? 3 : 4).map(pcOf))].sort((a, b) => a - b);
-        if (degrees.length === expected.length && degrees.every((p, i) => p === expected[i])) {
-          recognized = { enr, mode };
-          break;
-        }
-      }
-      if (recognized) break;
-    }
-  }
-  const name = recognized
-    ? pn(S.root) + (!isSym(recognized.enr) && recognized.mode === "min" ? "m" : "") + SUF[recognized.enr]
-    : pn(S.root);
-  const added = recognized ? (Q4I[recognized.enr] ?? []).map((i) => pcOf(S.root + i)) : [];
+  /* Les notes choisies au piano priment : elles sont toutes affichées, même
+     si une touche du clavier manque ou porte deux fois la même note. Sinon, on
+     déduplique les hauteurs issues des touches retenues. */
+  const pcs = extra.length ? fold(extra) : fold(composition);
+  /* Reconnaissance quel que soit l'ordre : Sol · Si · Ré donne bien « Sol »,
+     même si le bouton de Sol est joué en tiré et les autres en poussé. */
+  const recognized = pcs.length >= 2 ? identifyChord(pcs, S.root, S.mode) : null;
+  const ordered = recognized
+    ? [...pcs].sort((a, b) => pcOf(a - recognized.root) - pcOf(b - recognized.root))
+    : [...pcs].sort((a, b) => pcOf(a - S.root) - pcOf(b - S.root));
+  /* Nom de l'accord : affiché seulement si la combinaison de touches choisies
+     correspond exactement à une forme connue ; sinon le nom est effacé. */
+  const name = recognized ? recognized.name : "";
+  const added = recognized ? (Q4I[recognized.enr] ?? []).map((i) => pcOf(recognized.root + i)) : [];
   return {
     ...base,
     cp: ordered,
@@ -444,7 +500,7 @@ export function buildManualView(
     name,
     notes: ordered.map((p) => ({ p, added: added.includes(p) })),
     selected: new Set(pickedRight.map(btnId)),
-    roots: new Set(pickedRight.filter((b) => pcOf(b.m[S.dir]) === S.root).map(btnId)),
+    roots: new Set(recognized ? pickedRight.filter((b) => pcOf(pitchOf(b)) === recognized.root).map(btnId) : []),
     low: null,
     pb: bass,
     pc: chord,
@@ -453,7 +509,7 @@ export function buildManualView(
     bassNotes,
     chordNotes,
     miss: [],
-    status: `Touches choisies : ${ordered.length ? ordered.map(pn).join(" · ") : "aucune"}. ${recognized ? name : `Fondamentale ${pn(S.root)}`}.`,
+    status: `Touches choisies : ${ordered.length ? ordered.map(pn).join(" · ") : "aucune"}. ${recognized ? "Accord " + name : pcs.length >= 2 ? "Accord non reconnu" : `Fondamentale ${pn(S.root)}`}.`,
     playMidis: midis,
   };
 }

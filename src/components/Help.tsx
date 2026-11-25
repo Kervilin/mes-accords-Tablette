@@ -87,6 +87,16 @@ const SECTIONS: { t: string; items: string[] }[] = [
     ],
   },
   {
+    t: "Mode piano (balayage)",
+    items: [
+      "Balaye l'écran vers la gauche (n'importe où) : le clavier d'accordéon et le joystick laissent place à un piano d'une octave, de Do à Si. Balaye vers la droite pour revenir.",
+      "Touche une note : elle reste rouge et s'ajoute à la sélection. Touche-la à nouveau : elle est retirée. Les touches noires (Do♯, Ré♯, Fa♯, Sol♯, La♯) fonctionnent de la même façon.",
+      "Le grand rond affiche d'abord la note seule, puis, dès deux notes, le nom de l'accord formé (ex. Sol + Si + Ré → Sol, La + Do + Mi → Lam, Do7…), quel que soit l'ordre des notes. Si la combinaison ne forme aucun accord connu, le nom est effacé.",
+      "Touche le grand rond pour écouter, ou « Écouter l'accord ». « Effacer » vide la sélection.",
+      "Au retour vers l'accordéon, les notes choisies sont conservées et replacées sur les touches du clavier (même pour un accord non reconnu).",
+    ],
+  },
+  {
     t: "Joystick (sous les basses)",
     items: [
       "Glisse ← tiré · → poussé (ou touche T / P).",
@@ -98,7 +108,7 @@ const SECTIONS: { t: string; items: string[] }[] = [
     t: "Boutons du haut",
     items: [
       "Liste : choisir un clavier enregistré · 💾 enregistrer sous · ⚙ éditer / nouveau clavier · 🗑 supprimer.",
-      "⤢ plein écran · ☾/☀ thème · ⓘ affiche l'aide et ce mode d'emploi.",
+      "☾/☀ thème · ⓘ affiche l'aide et ce mode d'emploi. Balaye l'écran à gauche pour le piano.",
       "Tierces : accords de gauche à 3 notes (un mineur affiche son équivalent, ex. Rém → Fa).",
     ],
   },
@@ -114,7 +124,7 @@ const SECTIONS: { t: string; items: string[] }[] = [
     t: "Clavier d'ordinateur",
     items: [
       "← tiré · → poussé · + majeur · − mineur · 1…9 types d'accord · Espace écouter.",
-      "E édition · F plein écran · T tierces · Échap raz · en édition : 0 pas de note, Suppr efface.",
+      "E édition · T tierces · Échap raz · ←/→ tiré/poussé · balayage : piano ou accordéon.",
     ],
   },
 ];

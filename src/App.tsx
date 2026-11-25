@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bellows, KeyboardView } from "@/components/Accordion";
 import { Icon, Reveal, Toast } from "@/components/Chrome";
-import { DiagSheet, FullscreenHint, IconSheet, InstallSheet } from "@/components/Mobile";
+import { DiagSheet, IconSheet, InstallSheet } from "@/components/Mobile";
 import { ChordMenu, HelpSheet } from "@/components/Help";
 import { ChordPicker } from "@/components/ChordPicker";
+import { PianoMode } from "@/components/PianoMode";
+import { identifyChord, midiOf, notesToMidis, toSelection } from "@/lib/piano";
 import { blip, holdChord, playChord, prepareAudio, stopChord } from "@/lib/audio";
-import { autoFullscreenOnFirstGesture, exitFullscreen, isStandaloneMode, loadFsAuto, saveFsAuto, useFullscreen } from "@/lib/fullscreen";
 import { registerSW, useInstall, usePwaStatus } from "@/lib/pwa";
-import { isNative, nativeFullscreen, onAndroidBack } from "@/lib/native";
+import { isNative, onAndroidBack } from "@/lib/native";
 import {
   LEFT_MAX_ROWS,
   curName,
@@ -36,6 +37,7 @@ import {
   OTH,
   buildManualView,
   buildView,
+  btnId,
   isSym,
   ld,
   midiToNote,
@@ -61,7 +63,7 @@ import { detect } from "@/lib/pitch";
 
 const cs = (...x: (string | false | null | undefined)[]) => x.filter(Boolean).join(" ");
 
-type Ask = { kind: "saveedit" | "saveas" | "newkb" | "delete"; value: string } | null;
+type Ask = { kind: "saveedit" | "saveas" | "newkb" | "delete" | "manage"; value: string } | null;
 type Live = { note: string; info: string; pc: number | null; oct: number | null };
 
 export default function App() {
@@ -99,6 +101,10 @@ export default function App() {
     right: Set<string>;
     left: Set<number>;
     touchedLeft: Set<number>;
+    /** note retenue pour chaque bouton (le sens du soufflet peut changer ensuite) */
+    pitches: Map<string, number>;
+    /** notes choisies au piano : elles définissent le rond et le nom */
+    origin?: number[] | null;
   } | null>(null);
   /* Textes d'aide / légendes : masqués par défaut, réaffichés avec le bouton T */
   /* taille du clavier : null = ajusté automatiquement à l'écran ; sinon choisie au pincement */
@@ -134,10 +140,8 @@ export default function App() {
       return false;
     }
   });
-  const [fsHint, setFsHint] = useState(false);
   const [iconOpen, setIconOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
-  const [fsAuto, setFsAuto] = useState(() => loadFsAuto());
   const [iconChoice, setIconChoice] = useState<string>(() => {
     try {
       return localStorage.getItem("mac_icon") ?? "dark";
@@ -145,7 +149,6 @@ export default function App() {
       return "dark";
     }
   });
-  const fs = useFullscreen();
   /** appli Android (Capacitor) : plein écran natif, pas d'installation PWA */
   const native = isNative();
   const inst = useInstall();
@@ -280,11 +283,24 @@ export default function App() {
     input.click();
   };
   const vm = useMemo(
-    () => manual ? buildManualView(kb, S, manual.right, manual.left, manual.touchedLeft) : automatic,
+    () => manual
+      ? buildManualView(kb, S, manual.right, manual.left, manual.touchedLeft, manual.pitches, manual.origin ?? [])
+      : automatic,
     [kb, S, automatic, manual],
   );
   // A new chord, direction, keyboard or edit session resumes automatic fingering.
-  useEffect(() => setManual(null), [S.root, S.enr, S.mode, S.dir, S.tierces, kb, edit]);
+  // Une nouvelle sélection automatique reprend la main, sauf quand le piano
+  // vient volontairement de poser une sélection manuelle (notes conservées).
+  const manualGuard = useRef<string | null>(null);
+  const selSig = `${S.root}|${S.enr}|${S.mode}|${S.tierces}`;
+  useEffect(() => {
+    if (manualGuard.current === selSig) {
+      manualGuard.current = null;
+      return;
+    }
+    manualGuard.current = null;
+    setManual(null);
+  }, [selSig, kb, edit]);
 
   const toggleManualRight = (id: string) => {
     if (edit || S.root < 0) return;
@@ -293,9 +309,23 @@ export default function App() {
       // Manual fingering starts with the lit right-hand keys; left-hand
       // accompaniment is added only if the player explicitly selects it.
       const left = new Set(current?.left);
-      if (right.has(id)) right.delete(id);
-      else right.add(id);
-      return { right, left, touchedLeft: new Set(current?.touchedLeft) };
+      const pitches = new Map(current?.pitches);
+      // Au premier choix manuel, on fige la note de chaque touche déjà allumée.
+      if (!current) {
+        for (const key of right) {
+          const b = kb.b.find((x) => btnId(x) === key);
+          if (b && b.m[S.dir] > 0) pitches.set(key, b.m[S.dir]);
+        }
+      }
+      const b = kb.b.find((x) => btnId(x) === id);
+      if (right.has(id)) {
+        right.delete(id);
+        pitches.delete(id);
+      } else if (b && b.m[S.dir] > 0) {
+        right.add(id);
+        pitches.set(id, b.m[S.dir]);
+      }
+      return { right, left, touchedLeft: new Set(current?.touchedLeft), pitches };
     });
   };
   const toggleManualLeft = (ix: number) => {
@@ -310,7 +340,7 @@ export default function App() {
       if (left.has(ix)) left.delete(ix);
       else left.add(ix);
       touchedLeft.add(ix);
-      return { right, left, touchedLeft };
+      return { right, left, touchedLeft, pitches: new Map(current?.pitches) };
     });
   };
 
@@ -583,28 +613,183 @@ export default function App() {
     } else toast("Audio indisponible sur ce navigateur.");
   }, [playing, vm.playMidis, toast, stopPlayback]);
 
-  /* ---------- plein écran ---------- */
-  const toggleFullscreen = useCallback(async () => {
-    if (!fs.supported) {
-      setFsHint(true);
-      return;
-    }
-    const r = await fs.toggle();
-    if (r === "unsupported") setFsHint(true);
-    else if (r === "on") toast("Plein écran : la barre d'état est masquée.");
-  }, [fs, toast]);
-
-  /* ---------- démarrage en plein écran (appli installée) ---------- */
-  useEffect(() => {
-    const cleanup = autoFullscreenOnFirstGesture(!native && fsAuto && !fs.active);
-    return cleanup;
-  }, [fsAuto, fs.active, native]);
-
   useEffect(() => {
     try {
       localStorage.setItem("mac_icon", iconChoice);
     } catch {}
   }, [iconChoice]);
+
+  /* ---------- mode piano (glisser vers la gauche) ---------- */
+  const [piano, setPiano] = useState(false);
+  const [pianoNotes, setPianoNotes] = useState<Set<number>>(() => new Set());
+
+  /** Ouvre le piano : reprend l'accord courant s'il y en a un. */
+  const openPiano = useCallback(() => {
+    setPiano(true);
+    setPianoNotes((prev) => {
+      if (prev.size) return prev;
+      return new Set(vm.notes.map((n) => n.p));
+    });
+  }, [vm.notes]);
+
+  /** Revient aux claviers d'accordéon en gardant exactement les notes choisies. */
+  const closePiano = useCallback(() => {
+    if (pianoNotes.size) {
+      const id = identifyChord(pianoNotes, S.root, S.mode);
+      const chosen = [...pianoNotes];
+      const sel = toSelection(chosen, S) ?? { ...S, root: chosen[0], low: null };
+      // Chaque note choisie est retrouvée sur une touche de la main droite.
+      // On teste les deux sens (poussé = 0, tiré = 1) : certaines touches n'ont
+      // de note que d'un côté. On retient le sens qui couvre le plus de notes.
+      const dirTests: (0 | 1)[] = [S.dir, S.dir === 0 ? 1 : 0];
+      let best = { dir: S.dir, found: -1, keys: new Map<string, number>() };
+      for (const dir of dirTests) {
+        const keys = new Map<string, number>();
+        for (const pc of chosen) {
+          // Une touche déjà prise ne doit pas resservir pour une autre note.
+          const free = kb.b.filter((x) => !keys.has(btnId(x)) && x.m[dir] > 0);
+          const b = free.find((x) => pcOf(x.m[dir]) === pc);
+          if (!b) continue;
+          keys.set(btnId(b), pc);
+        }
+        if (keys.size > best.found) best = { dir, found: keys.size, keys };
+      }
+      const right = new Set<string>();
+      const pitches = new Map<string, number>();
+      for (const [k, pc] of best.keys) {
+        right.add(k);
+        pitches.set(k, pc);
+      }
+      const covered = new Set([...pitches.values()]);
+      const missing = chosen.filter((pc) => !covered.has(pc));
+      const selWithDir = { ...sel, dir: best.dir };
+      setS(selWithDir);
+      // Les notes non jouables sur ce clavier restent affichées dans le rond ;
+      // on le signale au lieu de perdre silencieusement une note.
+      if (missing.length) {
+        toast(
+          `Accord sur le rond, mais ${missing.map(pn).join(" · ")} n'existe pas sur ce clavier.`,
+        );
+      }
+      manualGuard.current = `${selWithDir.root}|${selWithDir.enr}|${selWithDir.mode}|${selWithDir.tierces}`;
+      setManual({ right, left: new Set(), touchedLeft: new Set(), pitches, origin: chosen });
+      toast(
+        id
+          ? `Accord ${id.name} repris sur le clavier d'accordéon.`
+          : "Notes conservées sur le clavier : accord non reconnu.",
+      );
+    }
+    setPiano(false);
+  }, [pianoNotes, S, kb, toast]);
+
+  const togglePianoNote = useCallback((pc: number) => {
+    prepareAudio();
+    setPianoNotes((current) => {
+      const next = new Set(current);
+      if (next.has(pc)) next.delete(pc);
+      else next.add(pc);
+      return next;
+    });
+    playChord([midiOf(pc, 4)], 0.9);
+  }, []);
+
+  const playPiano = useCallback(() => {
+    if (!pianoNotes.size) return;
+    if (playChord(notesToMidis(pianoNotes))) {
+      if (playTimer.current !== null) window.clearTimeout(playTimer.current);
+      cardSound.current = false;
+      setPlaying(true);
+      playTimer.current = window.setTimeout(stopPlayback, 2200);
+    } else toast("Audio indisponible sur ce navigateur.");
+  }, [pianoNotes, stopPlayback, toast]);
+
+  const holdPianoStart = useCallback(() => {
+    if (!pianoNotes.size) return;
+    stopPlayback();
+    cardSound.current = holdChord(notesToMidis(pianoNotes));
+    setPlaying(cardSound.current);
+  }, [pianoNotes, stopPlayback]);
+
+  const holdPianoEnd = useCallback(() => {
+    if (cardSound.current) stopPlayback();
+  }, [stopPlayback]);
+
+  /* ---------- balayage : gauche = piano, droite = accordéon ---------- */
+  useEffect(() => {
+    if (edit) return;
+    const overlayOpen = picker || helpOpen || ask !== null || chordMenu || diagOpen || iconOpen || installOpen;
+    if (overlayOpen) return;
+    let x0 = 0;
+    let y0 = 0;
+    let t0 = 0;
+    let tracking = false;
+    let horizontal = false;
+    let pid = -1;
+    let swallowClickUntil = 0;
+
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.buttons !== 1) return;
+      tracking = true;
+      horizontal = false;
+      pid = e.pointerId;
+      x0 = e.clientX;
+      y0 = e.clientY;
+      t0 = performance.now();
+    };
+    const move = (e: PointerEvent) => {
+      if (!tracking || e.pointerId !== pid) return;
+      const dx = e.clientX - x0;
+      const dy = e.clientY - y0;
+      // Geste franchement horizontal : on prend la main pour éviter de jouer
+      // une touche située sous le doigt pendant le balayage.
+      if (!horizontal && Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        horizontal = true;
+      }
+      if (horizontal && e.cancelable) e.preventDefault();
+    };
+    const up = (e: PointerEvent) => {
+      if (!tracking || e.pointerId !== pid) return;
+      tracking = false;
+      const dx = e.clientX - x0;
+      const dy = e.clientY - y0;
+      const ok =
+        horizontal &&
+        Math.abs(dx) >= 70 &&
+        Math.abs(dx) > Math.abs(dy) * 1.4 &&
+        performance.now() - t0 < 1100;
+      if (!ok) return;
+      // Le relâchement du doigt peut déclencher un clic sur une touche : on l'avale.
+      swallowClickUntil = performance.now() + 450;
+      if (dx < 0) {
+        if (!piano) openPiano();
+      } else if (piano) {
+        closePiano();
+      }
+    };
+    const click = (e: MouseEvent) => {
+      if (performance.now() < swallowClickUntil) {
+        e.stopPropagation();
+        e.preventDefault();
+        swallowClickUntil = 0;
+      }
+    };
+    const cancel = () => {
+      tracking = false;
+      horizontal = false;
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointermove", move, { capture: true, passive: false });
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", cancel, true);
+    window.addEventListener("click", click, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, { capture: true } as EventListenerOptions);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", cancel, true);
+      window.removeEventListener("click", click, true);
+    };
+  }, [edit, picker, helpOpen, ask, chordMenu, diagOpen, iconOpen, installOpen, piano, openPiano, closePiano]);
 
   /* ---------- actions clavier (musique) ---------- */
   const resetSel = () => setS((s) => ({ ...s, root: -1, dir: 1, low: null }));
@@ -660,6 +845,7 @@ export default function App() {
 
   /* ---------- édition ---------- */
   const startEdit = () => {
+    setPiano(false);
     setEdit({ dir: 1, vals: initVals(kb), listen: null, side: null, tmp: kb });
     setS((s) => ({ ...s, root: -1, dir: 1, low: null, more: false }));
     sigRef.current = "";
@@ -671,7 +857,6 @@ export default function App() {
   /* service worker (hors-ligne) + raccourci d'installation « Éditer mon clavier » */
   useEffect(() => {
     registerSW();
-    void nativeFullscreen(true);
     const p = new URLSearchParams(window.location.search);
     if (p.get("action") === "edit") {
       setEdit({ dir: 1, vals: initVals(kb), listen: null, side: null, tmp: kb });
@@ -924,7 +1109,6 @@ export default function App() {
     if (diagOpen) return setDiagOpen(false), true;
     if (iconOpen) return setIconOpen(false), true;
     if (installOpen) return setInstallOpen(false), true;
-    if (fsHint) return setFsHint(false), true;
     if (edit) return cancelEdit(), true;
     if (S.root >= 0) return resetSel(), true;
     return false; // rien à fermer : l'appli se ferme
@@ -1003,8 +1187,6 @@ export default function App() {
         togglePlay();
       } else if (e.key.toLowerCase() === "e" && !onCtrl) {
         startEdit();
-      } else if (e.key.toLowerCase() === "f" && !onCtrl) {
-        void toggleFullscreen();
       } else if (e.key.toLowerCase() === "t" && !onCtrl) {
         const v = !S.tierces;
         setS((s) => ({ ...s, tierces: v, low: null }));
@@ -1025,6 +1207,7 @@ export default function App() {
   /* ---------- rendu ---------- */
   return (
     <div
+      style={{ touchAction: "pan-y" }}
       className={cs(
         "relative z-10 mx-auto w-full max-w-[760px] px-2 pt-2 sm:px-4 sm:pt-3",
         edit ? "pb-[248px]" : "pb-10",
@@ -1144,18 +1327,6 @@ export default function App() {
               >
                 <Icon n="trash" />
               </button>
-              {!native && (
-              <button
-                type="button"
-                title={fs.active ? "Quitter le plein écran (F)" : "Plein écran (F)"}
-                aria-label={fs.active ? "Quitter le plein écran" : "Passer en plein écran"}
-                aria-pressed={fs.active}
-                className="ch grid h-9 w-9 min-h-[38px] place-items-center p-0"
-                onClick={() => void toggleFullscreen()}
-              >
-                <Icon n={fs.active ? "compress" : "expand"} />
-              </button>
-              )}
               <button
                 type="button"
                 title={theme === "dark" ? "Passer en clair" : "Passer en sombre"}
@@ -1195,6 +1366,19 @@ export default function App() {
         </header>
       )}
 
+      {piano && !edit && (
+        <PianoMode
+          notes={pianoNotes}
+          onToggle={togglePianoNote}
+          onClear={() => setPianoNotes(new Set())}
+          onPlay={playPiano}
+          onHoldStart={holdPianoStart}
+          onHoldEnd={holdPianoEnd}
+          onSwipeBack={closePiano}
+          playing={playing}
+        />
+      )}
+
       {/* ======= signature + bouton Mode d'emploi (affichés par le bouton i) ======= */}
       {!edit && showTexts && (
         <>
@@ -1220,7 +1404,7 @@ export default function App() {
 
       {/* ======= console accord ======= */}
       {!edit && (
-        <section className="panel rise mt-2.5 p-3 sm:p-4" style={{ animationDelay: "70ms" }}>
+        <section className="panel rise mt-2.5 p-3 sm:p-4" style={{ animationDelay: "70ms", display: piano ? "none" : undefined }}>
           {/* bande de fondamentales */}
           <div ref={stripRef} className="nt flex gap-1.5 overflow-x-auto pb-1">
             {([[-1, "—"], ...N.map((n, i) => [i, nm(n)])] as [number, string][]).map(([v, l]) => (
@@ -1358,7 +1542,7 @@ export default function App() {
       )}
 
       {/* ======= clavier PLEINE LARGEUR ======= */}
-      <section className="panel rise mt-2.5 p-2 sm:p-4" style={{ animationDelay: "130ms" }}>
+      <section className="panel rise mt-2.5 p-2 sm:p-4" style={{ animationDelay: "130ms", display: piano ? "none" : undefined }}>
         <div
           ref={wrapRef}
           className="w-full overflow-x-auto py-1"
@@ -1431,7 +1615,7 @@ export default function App() {
       </section>
 
       {/* ======= actions PWA & légendes (affichées avec le bouton info) ======= */}
-      {showTexts && (
+      {showTexts && !piano && (
       <Reveal className="mt-2.5" delay={40}>
         <div className="panel p-3.5 sm:p-4">
           {!native && (
@@ -1811,29 +1995,6 @@ export default function App() {
           </div>
         </div>
       )}
-      <FullscreenHint
-        open={fsHint}
-        onClose={() => setFsHint(false)}
-        isIOS={fs.isIOS}
-        active={fs.active}
-        auto={fsAuto}
-        canAuto={fs.supported && isStandaloneMode()}
-        onAuto={(v) => {
-          setFsAuto(v);
-          saveFsAuto(v);
-          if (!v && fs.active) void exitFullscreen();
-          toast(v ? "L'appli passera en plein écran dès la première touche." : "Démarrage en mode normal.");
-        }}
-        onIcons={() => {
-          setFsHint(false);
-          setIconOpen(true);
-        }}
-        onInstall={() => {
-          setFsHint(false);
-          setInstallOpen(true);
-        }}
-      />
-
       <DiagSheet
         open={diagOpen}
         onClose={() => setDiagOpen(false)}

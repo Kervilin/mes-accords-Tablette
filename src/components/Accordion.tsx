@@ -34,14 +34,12 @@ export function Bellows({
   // ═══════════════════════════════════════════════════════════════
   const OUV = 76    // % d'ouverture (0-100)
   const MD = 20;    // % de marge fixe (0-100)
-  const So: 'G' | 'D' = 'G';  // Sens : 'G' = vers Gauche, 'D' = vers Droite
-  const Fi: 'D' | 'G' = 'D';  // Fixation : 'D' = à Droite, 'G' = à Gauche
+  const So = 'G' as 'G' | 'D';  // Sens : 'G' = vers Gauche, 'D' = vers Droite
+  const Fi = 'D' as 'D' | 'G';  // Fixation : 'D' = à Droite, 'G' = à Gauche
   // ═══════════════════════════════════════════════════════════════
 
   const folds = Array.from({ length: 26 });
   const factor = Math.max(0, Math.min(1, (open - 24) / 56));
-
-  console.log("🪗 Bellows : OUV=", OUV, "MD=", MD, "So=", So, "Fi=", Fi, "factor=", factor.toFixed(2));
 
   let leftPos: string;
   let rightPos: string;
@@ -1071,7 +1069,9 @@ export function KeyboardView(p: KeyboardViewProps) {
           })}
         >
           <span className="cc-name" style={V({ fontSize: `${Math.round(Cd * 0.2)}px` })}>
-            {vm.name}
+            {/* En sélection manuelle, le nom disparaît si les touches choisies
+                ne forment pas un accord reconnu. */}
+            {vm.name || "\u00A0"}
           </span>
           <span className="cc-notes" style={V({ fontSize: `${Math.round(Cd * 0.115)}px` })}>
             {vm.notes.length
