@@ -43,6 +43,7 @@ jobs:
       - name: Construire l'appli
         run: |
           npm ci
+                    npm install --no-save @capacitor/cli@^7.6.10 @capacitor/android@^7.6.10
           bash deploy/prepare-icons.sh
           npm run build
           npx cap sync android
