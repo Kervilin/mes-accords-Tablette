@@ -703,9 +703,9 @@ export default function App() {
     if (cardSound.current) stopPlayback();
   }, [stopPlayback]);
 
-  /* ---------- balayage : haut = piano, bas = accordéon ----------
+  /* ---------- balayage latéral : gauche/droite = piano ----------
      Détection par événements tactiles (passifs) : elle fonctionne même quand
-     le navigateur gère la page, et ne bloque jamais le défilement. */
+     le navigateur gère la page, et ne bloque jamais le défilement vertical. */
   useEffect(() => {
     if (edit) return;
     const overlayOpen = picker || helpOpen || ask !== null || chordMenu || diagOpen || iconOpen || installOpen;
@@ -742,25 +742,22 @@ export default function App() {
       clearSelection();
       const dx = x - x0;
       const dy = y - y0;
-      const far = Math.abs(dy) >= 70 && Math.abs(dy) > Math.abs(dx) * 1.3 && performance.now() - t0 < 1100;
-      if (!far) return;
-      const fromTop = window.scrollY <= 4 || !!startEl?.closest?.("header.panel, .chord-card, .panel.rise");
-      if (dy < 0) {
-        if (!piano && fromTop) {
-          swallowUntil = performance.now() + 450;
-          openPiano();
-        }
-      } else if (piano) {
-        swallowUntil = performance.now() + 450;
-        closePiano();
-      }
+      void startEl;
+      // Geste franchement horizontal : ouvre le piano (vers la gauche ou la
+      // droite), et le referme dans l'autre sens quand on y est déjà.
+      const sideways =
+        Math.abs(dx) >= 80 && Math.abs(dx) > Math.abs(dy) * 1.5 && performance.now() - t0 < 1200;
+      if (!sideways) return;
+      swallowUntil = performance.now() + 450;
+      if (!piano) openPiano();
+      else closePiano();
     };
 
     const touchStart = (e: TouchEvent) => {
       const t = e.touches[0];
       const el = (e.target as HTMLElement) ?? null;
-      // En mode piano, un balayage vers le bas peut partir de n'importe où
-      // (touches comprises) : il ferme la page. À l'inverse, on n'ouvre jamais
+      // En mode piano, un balayage latéral peut partir de n'importe où
+      // (touches comprises) : il referme la page. À l'inverse, on n'ouvre jamais
       // le piano depuis une touche de l'accordéon pour ne pas jouer une note.
       if (e.touches.length !== 1 || (ignored(el) && !piano)) {
         tracking = false;
@@ -1263,7 +1260,7 @@ export default function App() {
         </div>
       ) : (
         /* ======= en-tête ======= */
-        <header className="panel rise overflow-hidden" style={{ touchAction: "none" }}>
+        <header className="panel rise overflow-hidden" style={{ touchAction: "pan-y" }}>
               {bellowsPos === "top" && (
               <div className="flex items-center gap-1.5">
                 <div

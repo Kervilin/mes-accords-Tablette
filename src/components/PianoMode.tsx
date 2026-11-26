@@ -43,7 +43,7 @@ export function PianoMode({ notes, onToggle, onClear, onPlay, onHoldStart, onHol
   const canPlay = total > 0;
 
   return (
-    <section className="panel rise mt-2.5 overflow-hidden p-3 sm:p-5" aria-label="Piano" style={{ touchAction: "none" }}>
+    <section className="panel rise mt-2.5 overflow-hidden p-3 sm:p-5" aria-label="Piano" style={{ touchAction: "pan-y" }}>
       <p className="mb-3 text-center text-[12.5px]" style={{ color: "var(--c-mu)" }}>
         Touche une note pour l’ajouter · touche-la à nouveau pour la retirer
       </p>
@@ -183,8 +183,8 @@ export function PianoMode({ notes, onToggle, onClear, onPlay, onHoldStart, onHol
         </div>
       </div>
 
-      {/* actions : sous le clavier */}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+      {/* actions : juste sous le clavier */}
+      <div className="-mt-1 flex flex-col gap-2 sm:-mt-2 sm:flex-row">
         <button
           type="button"
           onClick={onClear}
@@ -200,7 +200,7 @@ export function PianoMode({ notes, onToggle, onClear, onPlay, onHoldStart, onHol
           type="button"
           onClick={onSwipeBack}
           className="ch min-h-[42px] flex-1 px-3 text-[13.5px]"
-          title="Revenir au clavier d'accordéon (ou balaye vers le bas)"
+          title="Revenir au clavier d'accordéon (ou balaye latéralement)"
         >
           <span className="inline-flex items-center gap-1.5">
             <Icon n="expand" className="rotate-180" /> Accordéon
