@@ -623,13 +623,11 @@ export default function App() {
   const [piano, setPiano] = useState(false);
   const [pianoNotes, setPianoNotes] = useState<Set<number>>(() => new Set());
 
-  /** Ouvre le piano : reprend l'accord courant s'il y en a un. */
+  /** Ouvre le piano : reprend les notes de l'accord courant, sans reste des
+      sessions précédentes (c'était la cause des accords affichés en 7e). */
   const openPiano = useCallback(() => {
     setPiano(true);
-    setPianoNotes((prev) => {
-      if (prev.size) return prev;
-      return new Set(vm.notes.map((n) => n.p));
-    });
+    setPianoNotes(new Set(vm.notes.map((n) => n.p)));
   }, [vm.notes]);
 
   /** Revient aux claviers d'accordéon en gardant exactement les notes choisies. */
@@ -660,17 +658,8 @@ export default function App() {
         right.add(k);
         pitches.set(k, pc);
       }
-      const covered = new Set([...pitches.values()]);
-      const missing = chosen.filter((pc) => !covered.has(pc));
       const selWithDir = { ...sel, dir: best.dir };
       setS(selWithDir);
-      // Les notes non jouables sur ce clavier restent affichées dans le rond ;
-      // on le signale au lieu de perdre silencieusement une note.
-      if (missing.length) {
-        toast(
-          `Accord sur le rond, mais ${missing.map(pn).join(" · ")} n'existe pas sur ce clavier.`,
-        );
-      }
       manualGuard.current = `${selWithDir.root}|${selWithDir.enr}|${selWithDir.mode}|${selWithDir.tierces}`;
       setManual({ right, left: new Set(), touchedLeft: new Set(), pitches, origin: chosen });
       toast(
@@ -714,7 +703,9 @@ export default function App() {
     if (cardSound.current) stopPlayback();
   }, [stopPlayback]);
 
-  /* ---------- balayage : gauche = piano, droite = accordéon ---------- */
+  /* ---------- balayage : haut = piano, bas = accordéon ----------
+     Détection par événements tactiles (passifs) : elle fonctionne même quand
+     le navigateur gère la page, et ne bloque jamais le défilement. */
   useEffect(() => {
     if (edit) return;
     const overlayOpen = picker || helpOpen || ask !== null || chordMenu || diagOpen || iconOpen || installOpen;
@@ -723,70 +714,104 @@ export default function App() {
     let y0 = 0;
     let t0 = 0;
     let tracking = false;
-    let horizontal = false;
-    let pid = -1;
-    let swallowClickUntil = 0;
+    let swallowUntil = 0;
+    let startEl: HTMLElement | null = null;
 
-    const down = (e: PointerEvent) => {
-      if (e.pointerType === "mouse" && e.buttons !== 1) return;
+    const ignored = (el: HTMLElement | null) =>
+      !!el?.closest?.(".piano-key, .piano-black, .cand, .joy, .plbtn, .dual, .carry, .sheet-in, input, select, textarea");
+
+    const begin = (x: number, y: number, el: HTMLElement | null) => {
       tracking = true;
-      horizontal = false;
-      pid = e.pointerId;
-      x0 = e.clientX;
-      y0 = e.clientY;
+      x0 = x;
+      y0 = y;
       t0 = performance.now();
+      startEl = el;
     };
-    const move = (e: PointerEvent) => {
-      if (!tracking || e.pointerId !== pid) return;
-      const dx = e.clientX - x0;
-      const dy = e.clientY - y0;
-      // Geste franchement horizontal : on prend la main pour éviter de jouer
-      // une touche située sous le doigt pendant le balayage.
-      if (!horizontal && Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        horizontal = true;
+    const clearSelection = () => {
+      try {
+        const sel = window.getSelection?.();
+        if (sel && sel.rangeCount) sel.removeAllRanges();
+      } catch {
+        /* ignore */
       }
-      if (horizontal && e.cancelable) e.preventDefault();
     };
-    const up = (e: PointerEvent) => {
-      if (!tracking || e.pointerId !== pid) return;
+    const finish = (x: number, y: number) => {
+      if (!tracking) return;
       tracking = false;
-      const dx = e.clientX - x0;
-      const dy = e.clientY - y0;
-      const ok =
-        horizontal &&
-        Math.abs(dx) >= 70 &&
-        Math.abs(dx) > Math.abs(dy) * 1.4 &&
-        performance.now() - t0 < 1100;
-      if (!ok) return;
-      // Le relâchement du doigt peut déclencher un clic sur une touche : on l'avale.
-      swallowClickUntil = performance.now() + 450;
-      if (dx < 0) {
-        if (!piano) openPiano();
+      // Un appui long peut sélectionner le libellé d'un bouton : on l'efface.
+      clearSelection();
+      const dx = x - x0;
+      const dy = y - y0;
+      const far = Math.abs(dy) >= 70 && Math.abs(dy) > Math.abs(dx) * 1.3 && performance.now() - t0 < 1100;
+      if (!far) return;
+      const fromTop = window.scrollY <= 4 || !!startEl?.closest?.("header.panel, .chord-card, .panel.rise");
+      if (dy < 0) {
+        if (!piano && fromTop) {
+          swallowUntil = performance.now() + 450;
+          openPiano();
+        }
       } else if (piano) {
+        swallowUntil = performance.now() + 450;
         closePiano();
       }
     };
+
+    const touchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      const el = (e.target as HTMLElement) ?? null;
+      // En mode piano, un balayage vers le bas peut partir de n'importe où
+      // (touches comprises) : il ferme la page. À l'inverse, on n'ouvre jamais
+      // le piano depuis une touche de l'accordéon pour ne pas jouer une note.
+      if (e.touches.length !== 1 || (ignored(el) && !piano)) {
+        tracking = false;
+        return;
+      }
+      begin(t.clientX, t.clientY, el);
+    };
+    const touchMove = (e: TouchEvent) => {
+      // Rien à faire : le suivi se fait au relâchement (touchend).
+      void e;
+    };
+    const touchEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (!t) return;
+      finish(t.clientX, t.clientY);
+    };
+    const mouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const el = (e.target as HTMLElement) ?? null;
+      if (ignored(el) && !piano) {
+        tracking = false;
+        return;
+      }
+      begin(e.clientX, e.clientY, el);
+    };
+    const mouseUp = (e: MouseEvent) => finish(e.clientX, e.clientY);
     const click = (e: MouseEvent) => {
-      if (performance.now() < swallowClickUntil) {
+      if (performance.now() < swallowUntil) {
         e.stopPropagation();
         e.preventDefault();
-        swallowClickUntil = 0;
+        swallowUntil = 0;
       }
     };
     const cancel = () => {
       tracking = false;
-      horizontal = false;
     };
-    window.addEventListener("pointerdown", down, true);
-    window.addEventListener("pointermove", move, { capture: true, passive: false });
-    window.addEventListener("pointerup", up, true);
-    window.addEventListener("pointercancel", cancel, true);
+
+    window.addEventListener("touchstart", touchStart, { passive: true });
+    window.addEventListener("touchmove", touchMove, { passive: true });
+    window.addEventListener("touchend", touchEnd, { passive: true });
+    window.addEventListener("touchcancel", cancel, { passive: true });
+    window.addEventListener("mousedown", mouseDown, true);
+    window.addEventListener("mouseup", mouseUp, true);
     window.addEventListener("click", click, true);
     return () => {
-      window.removeEventListener("pointerdown", down, true);
-      window.removeEventListener("pointermove", move, { capture: true } as EventListenerOptions);
-      window.removeEventListener("pointerup", up, true);
-      window.removeEventListener("pointercancel", cancel, true);
+      window.removeEventListener("touchstart", touchStart);
+      window.removeEventListener("touchmove", touchMove);
+      window.removeEventListener("touchend", touchEnd);
+      window.removeEventListener("touchcancel", cancel);
+      window.removeEventListener("mousedown", mouseDown, true);
+      window.removeEventListener("mouseup", mouseUp, true);
       window.removeEventListener("click", click, true);
     };
   }, [edit, picker, helpOpen, ask, chordMenu, diagOpen, iconOpen, installOpen, piano, openPiano, closePiano]);
@@ -1207,7 +1232,6 @@ export default function App() {
   /* ---------- rendu ---------- */
   return (
     <div
-      style={{ touchAction: "pan-y" }}
       className={cs(
         "relative z-10 mx-auto w-full max-w-[760px] px-2 pt-2 sm:px-4 sm:pt-3",
         edit ? "pb-[248px]" : "pb-10",
@@ -1239,7 +1263,7 @@ export default function App() {
         </div>
       ) : (
         /* ======= en-tête ======= */
-        <header className="panel rise overflow-hidden">
+        <header className="panel rise overflow-hidden" style={{ touchAction: "none" }}>
               {bellowsPos === "top" && (
               <div className="flex items-center gap-1.5">
                 <div

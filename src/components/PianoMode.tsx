@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Icon } from "@/components/Chrome";
-import { BLACK_KEYS, WHITE_PCS, addedPcs, chordNotes, identifyChord, notesToMidis, pcName } from "@/lib/piano";
+import { BLACK_KEYS, WHITE_PCS, addedPcs, chordNotes, identifyChord, pcName } from "@/lib/piano";
 import { pcOf } from "@/lib/music";
 
 /* ============================================================
@@ -43,45 +43,10 @@ export function PianoMode({ notes, onToggle, onClear, onPlay, onHoldStart, onHol
   const canPlay = total > 0;
 
   return (
-    <section className="panel rise mt-2.5 overflow-hidden p-3 sm:p-5" aria-label="Mode piano">
-      {/* bandeau de mode + balayage */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-bold"
-            style={{ background: "var(--c-card2)", color: "var(--c-tx)", border: "1px solid var(--c-bd)" }}
-          >
-            <PianoGlyph /> Piano · Do → Si
-          </span>
-          <span className="hidden text-[12px] sm:inline" style={{ color: "var(--c-mu)" }}>
-            Touche une note pour l’ajouter, touche-la à nouveau pour la retirer.
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onClear}
-            disabled={!total}
-            className="ch min-h-[38px] px-3 text-[13px] disabled:opacity-35"
-            title="Effacer toutes les notes choisies"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Icon n="trash" /> Effacer
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onSwipeBack}
-            className="ch min-h-[38px] px-3 text-[13px]"
-            title="Revenir au clavier d’accordéon"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Icon n="expand" className="rotate-180" /> Accordéon
-            </span>
-          </button>
-        </div>
-      </div>
-
+    <section className="panel rise mt-2.5 overflow-hidden p-3 sm:p-5" aria-label="Piano" style={{ touchAction: "none" }}>
+      <p className="mb-3 text-center text-[12.5px]" style={{ color: "var(--c-mu)" }}>
+        Touche une note pour l’ajouter · touche-la à nouveau pour la retirer
+      </p>
       {/* grand rond + touches */}
       <div className="grid items-center gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="flex flex-col items-center">
@@ -218,29 +183,31 @@ export function PianoMode({ notes, onToggle, onClear, onPlay, onHoldStart, onHol
         </div>
       </div>
 
-      {/* rappel de balayage */}
-      <button
-        type="button"
-        onClick={onSwipeBack}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-[12px] transition hover:opacity-90"
-        style={{ borderColor: "var(--c-bd)", background: "var(--c-bg2)", color: "var(--c-mu)" }}
-      >
-        <Icon n="expand" className="rotate-90" />
-        Balaye vers la droite (ou touche ici) pour revenir aux claviers d’accordéon avec tes notes
-      </button>
+      {/* actions : sous le clavier */}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={!total}
+          className="ch min-h-[42px] flex-1 px-3 text-[13.5px] disabled:opacity-35"
+          title="Effacer toutes les notes choisies"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Icon n="trash" /> Effacer
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onSwipeBack}
+          className="ch min-h-[42px] flex-1 px-3 text-[13.5px]"
+          title="Revenir au clavier d'accordéon (ou balaye vers le bas)"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Icon n="expand" className="rotate-180" /> Accordéon
+          </span>
+        </button>
+      </div>
+
     </section>
   );
 }
-
-/** Petit pictogramme de piano pour le bandeau de mode. */
-function PianoGlyph() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="5" width="20" height="15" rx="2" />
-      <path d="M7 5v9M12 5v9M17 5v9" />
-      <path d="M9.5 5v5.5M14.5 5v5.5" strokeWidth="3" />
-    </svg>
-  );
-}
-
-export { notesToMidis };

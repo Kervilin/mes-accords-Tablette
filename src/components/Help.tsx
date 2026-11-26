@@ -89,11 +89,11 @@ const SECTIONS: { t: string; items: string[] }[] = [
   {
     t: "Mode piano (balayage)",
     items: [
-      "Balaye l'écran vers la gauche (n'importe où) : le clavier d'accordéon et le joystick laissent place à un piano d'une octave, de Do à Si. Balaye vers la droite pour revenir.",
+      "Balaye vers le haut (depuis le haut de l'écran) : le clavier d'accordéon et le joystick laissent place à un piano d'une octave, de Do à Si. Balaye vers le bas, ou touche « Accordéon » sous le clavier, pour revenir.",
       "Touche une note : elle reste rouge et s'ajoute à la sélection. Touche-la à nouveau : elle est retirée. Les touches noires (Do♯, Ré♯, Fa♯, Sol♯, La♯) fonctionnent de la même façon.",
       "Le grand rond affiche d'abord la note seule, puis, dès deux notes, le nom de l'accord formé (ex. Sol + Si + Ré → Sol, La + Do + Mi → Lam, Do7…), quel que soit l'ordre des notes. Si la combinaison ne forme aucun accord connu, le nom est effacé.",
       "Touche le grand rond pour écouter, ou « Écouter l'accord ». « Effacer » vide la sélection.",
-      "Au retour vers l'accordéon, les notes choisies sont conservées et replacées sur les touches du clavier (même pour un accord non reconnu).",
+      "Au retour vers l'accordéon, les notes choisies sont conservées et replacées sur les touches du clavier (même pour un accord non reconnu). Les boutons « Effacer » et « Accordéon » se trouvent sous le clavier.",
     ],
   },
   {
